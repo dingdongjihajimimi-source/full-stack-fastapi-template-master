@@ -4,6 +4,7 @@ from app.api.routes import (
     chat,
     crawler,
     fireworks,
+    industrial,
     items,
     login,
     private,
@@ -20,6 +21,7 @@ api_router.include_router(items.router)
 api_router.include_router(chat.router)
 api_router.include_router(fireworks.router)
 api_router.include_router(crawler.router, prefix="/crawl", tags=["crawler"])
+api_router.include_router(industrial.router, prefix="/industrial", tags=["industrial"])
 
 
 if settings.ENVIRONMENT == "local":

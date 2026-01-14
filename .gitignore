@@ -1,11 +1,32 @@
-.vscode
+.vscode/
 node_modules/
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
 .env
-.trae
-.github
-.img
 
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/venv/
+backend/.venv/
+
+# IDEs
+.idea/
+*.swp
+*.swo
+
+# Local data & storage
+backend/generated_data/
+backend/app/storage/
+backend/openapi_dump.json
+backend/stress_test_crawler.py
+backend/test_crawler_flow.py
+backend/test_volc_deepseek.py

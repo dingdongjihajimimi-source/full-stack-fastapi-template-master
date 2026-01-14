@@ -102,6 +102,9 @@ class Settings(BaseSettings):
 
     # DeepSeek Settings
     DEEPSEEK_API_KEY: str | None = None
+    
+    # Storage Settings
+    STORAGE_ROOT_DIR: str = "backend/storage"
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":

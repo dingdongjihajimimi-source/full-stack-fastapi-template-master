@@ -16,7 +16,10 @@ const baseItems: Item[] = [
   { icon: Home, title: "Dashboard", path: "/" },
   { icon: Briefcase, title: "Items", path: "/items" },
   { icon: MessageSquare, title: "Chat", path: "/chat" },
-  { icon: Bot, title: "AI SQL Generator", path: "/crawler" },
+  { icon: MessageSquare, title: "Chat", path: "/chat" },
+  { icon: Bot, title: "Auto Crawler", path: "/crawler/auto" },
+  { icon: Users, title: "Manual Scraper", path: "/crawler/manual" }, // Temporary icon
+  { icon: Home, title: "Industrial Harvest", path: "/crawler/industrial" }, // Temporary icon
 ]
 
 export function AppSidebar() {

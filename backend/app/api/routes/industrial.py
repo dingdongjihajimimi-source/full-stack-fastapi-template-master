@@ -30,18 +30,20 @@ class CollectRequest(BaseModel):
     """收集请求参数"""
     url: str
     scroll_count: int = 5
+    max_items: int = 100
+    wait_until: str = "networkidle"  # networkidle, commit, domcontentloaded, load
 
 
-async def run_industrial_harvest(batch_id: str, url: str, scroll_count: int):
+async def run_industrial_harvest(batch_id: str, url: str, config: dict):
     """
     执行工业收割任务（后台任务）
-    使用 Playwright 滚动页面并收集资源
+    使用 IndustrialCollector 滚动页面并收集资源
     """
     from app.core.db import engine
     from sqlmodel import Session
+    from app.industrial_pipeline.collector import IndustrialCollector
     
     batch_dir = INDUSTRIAL_DIR / batch_id
-    batch_dir.mkdir(parents=True, exist_ok=True)
     
     # 更新状态为处理中
     with Session(engine) as db:
@@ -52,82 +54,21 @@ async def run_industrial_harvest(batch_id: str, url: str, scroll_count: int):
             db.add(batch)
             db.commit()
     
-    collected_count = 0
-    
+    async def update_progress(current_count: int):
+        """Callback to update item count in DB"""
+        with Session(engine) as db:
+            b = db.get(IndustrialBatch, uuid.UUID(batch_id))
+            if b:
+                b.item_count = current_count
+                db.add(b)
+                db.commit()
+
     try:
-        from playwright.async_api import async_playwright
-        import httpx
+        collector = IndustrialCollector()
+        # 执行收割任务 - 传入整套配置和回调
+        collected_count = await collector.harvest(url, batch_dir, config, progress_callback=update_progress)
         
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
-            page = await context.new_page()
-            
-            # 收集所有请求的资源
-            resources = []
-            
-            async def handle_response(response):
-                nonlocal collected_count
-                try:
-                    content_type = response.headers.get("content-type", "")
-                    # 收集图片和其他有价值的资源
-                    if any(ct in content_type for ct in ["image/", "application/json", "text/html"]):
-                        body = await response.body()
-                        if len(body) > 0:
-                            resources.append({
-                                "url": response.url,
-                                "content_type": content_type,
-                                "body": body,
-                            })
-                except Exception:
-                    pass
-            
-            page.on("response", handle_response)
-            
-            await page.goto(url, wait_until="networkidle", timeout=60000)
-            
-            # 滚动页面加载更多内容
-            for i in range(scroll_count):
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(2000)  # 等待内容加载
-            
-            await browser.close()
-        
-        # 保存收集到的资源
-        for i, resource in enumerate(resources):
-            try:
-                content_type = resource["content_type"]
-                ext = ".bin"
-                if "image/jpeg" in content_type:
-                    ext = ".jpg"
-                elif "image/png" in content_type:
-                    ext = ".png"
-                elif "image/gif" in content_type:
-                    ext = ".gif"
-                elif "image/webp" in content_type:
-                    ext = ".webp"
-                elif "application/json" in content_type:
-                    ext = ".json"
-                elif "text/html" in content_type:
-                    ext = ".html"
-                
-                filename = f"resource_{i:04d}{ext}"
-                filepath = batch_dir / filename
-                filepath.write_bytes(resource["body"])
-                collected_count += 1
-            except Exception as e:
-                logger.error(f"Failed to save resource: {e}")
-        
-        # 保存元数据
-        metadata = {
-            "url": url,
-            "scroll_count": scroll_count,
-            "collected_at": datetime.now().isoformat(),
-            "resource_count": collected_count,
-        }
-        (batch_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
-        
-        # 更新批次状态
+        # 更新批次状态 - 成功
         with Session(engine) as db:
             batch = db.get(IndustrialBatch, uuid.UUID(batch_id))
             if batch:
@@ -138,6 +79,7 @@ async def run_industrial_harvest(batch_id: str, url: str, scroll_count: int):
                 
     except Exception as e:
         logger.error(f"Industrial harvest failed: {e}")
+        # 更新批次状态 - 失败
         with Session(engine) as db:
             batch = db.get(IndustrialBatch, uuid.UUID(batch_id))
             if batch:
@@ -169,8 +111,7 @@ def get_batches(session: SessionDep) -> Any:
 
 @router.post("/collect")
 def start_collect(
-    url: str,
-    scroll_count: int,
+    request: CollectRequest,
     background_tasks: BackgroundTasks,
     session: SessionDep,
 ) -> str:
@@ -179,19 +120,22 @@ def start_collect(
     """
     # 创建批次记录
     batch = IndustrialBatch(
-        url=url,
+        url=request.url,
         status="pending",
     )
     session.add(batch)
     session.commit()
     session.refresh(batch)
     
+    # 准备配置字典
+    config = request.model_dump()
+    
     # 添加后台任务
     background_tasks.add_task(
         run_industrial_harvest,
         str(batch.id),
-        url,
-        scroll_count,
+        request.url,
+        config,
     )
     
     return str(batch.id)

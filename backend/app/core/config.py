@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
+    
+    # AI Extraction (DeepSeek / Volcengine)
+    VOLC_API_KEY: str | None = None
+    VOLC_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
+    VOLC_DEEPSEEK_MODEL_ID: str | None = None
 
     BACKEND_CORS_ORIGINS: Annotated[
         list[AnyUrl] | str, BeforeValidator(parse_cors)

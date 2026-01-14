@@ -13,14 +13,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import select
+import tempfile
+import os
 
 from app.api.deps import SessionDep
 from app.models import IndustrialBatch, IndustrialBatchPublic, IndustrialFileInfo
 from app.core.paths import INDUSTRIAL_DIR
+from app.industrial_pipeline.html_cleaner import HtmlCleaner
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -263,4 +266,202 @@ def delete_batch(batch_id: uuid.UUID, session: SessionDep) -> dict:
     session.delete(batch)
     session.commit()
     
-    return {"status": "deleted"}
+    return {" status": "deleted"}
+
+
+class LightCleanRequest(BaseModel):
+    """Light clean request parameters"""
+    file_name: str  # Name of the HTML file to clean
+
+
+@router.post("/batch/{batch_id}/light-clean")
+def light_clean_batch_file(
+    batch_id: str,
+    request: LightCleanRequest,
+    session: SessionDep
+) -> Any:
+    """
+    Perform lightweight HTML cleaning on a specific file from a batch.
+    
+    Strips non-semantic tags (style, script, svg) to reduce file size
+    and prepare for AI extraction.
+    """
+    from app.industrial_pipeline.html_cleaner import HtmlCleaner
+    
+    # Validate batch exists
+    batch = session.get(IndustrialBatch, uuid.UUID(batch_id))
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    
+    batch_dir = Path(batch.storage_path) if batch.storage_path else INDUSTRIAL_DIR / batch_id
+    input_file = batch_dir / request.file_name
+    
+    if not input_file.exists():
+        raise HTTPException(status_code=404, detail=f"File {request.file_name} not found in batch")
+    
+    # Generate output filename
+    output_filename = f"{input_file.stem}_cleaned{input_file.suffix}"
+    output_file = batch_dir / output_filename
+    
+    try:
+        # Perform cleaning
+        stats = HtmlCleaner.clean_file(input_file, output_file)
+        
+        logger.info(f"Light clean completed: {request.file_name} -> {output_filename}")
+        logger.info(f"Size reduction: {stats['reduction_percent']}%")
+        
+        return {
+            "status": "success",
+            "input_file": request.file_name,
+            "output_file": output_filename,
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Light clean failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Cleaning failed: {str(e)}")
+
+
+@router.post("/upload-clean")
+async def upload_and_clean(file: UploadFile = File(...)) -> Any:
+    """
+    Stateless file upload and cleaning.
+    Saves uploaded file to temp, cleans it, and returns stats.
+    """
+    if not file.filename.endswith(('.html', '.htm')):
+        raise HTTPException(status_code=400, detail="Only HTML files are supported")
+
+    try:
+        # Create temp files
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_in:
+            shutil.copyfileobj(file.file, tmp_in)
+            input_path = Path(tmp_in.name)
+        
+        output_path = input_path.parent / f"{input_path.stem}_cleaned.html"
+        
+        # Clean
+        cleaner = HtmlCleaner()
+        stats = cleaner.clean_file(input_path, output_path)
+        
+        # Return stats and temp file ID
+        return {
+            "message": "Cleaning successful",
+            "temp_id": output_path.name,
+            "original_name": file.filename,
+            "stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Upload cleaning failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Cleanup input file immediately, keep output for download
+        if 'input_path' in locals() and input_path.exists():
+            try:
+                os.unlink(input_path)
+            except:
+                pass
+
+@router.get("/temp-file/{filename}")
+async def download_temp_file(filename: str):
+    """
+    Download a temporary cleaned file.
+    """
+    # Security check: only allow files created in temp dir and with known pattern
+    temp_dir = Path(tempfile.gettempdir())
+    file_path = temp_dir / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found or expired")
+        
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="text/html"
+    )
+
+
+@router.post("/upload-deep-clean")
+async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
+    """
+    Deep clean: Light clean + AI extraction.
+    Returns JSON data extracted by AI, or falls back to light clean stats on failure.
+    """
+    from app.industrial_pipeline.ai_extractor import AiExtractor
+    
+    if not file.filename.endswith(('.html', '.htm')):
+        raise HTTPException(status_code=400, detail="Only HTML files are supported")
+
+    try:
+        # Step 1: Save uploaded file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_in:
+            shutil.copyfileobj(file.file, tmp_in)
+            input_path = Path(tmp_in.name)
+        
+        output_path = input_path.parent / f"{input_path.stem}_cleaned.html"
+        
+        # Step 2: Light clean first
+        cleaner = HtmlCleaner()
+        stats = cleaner.clean_file(input_path, output_path)
+        
+        # Read cleaned HTML for AI
+        cleaned_html = output_path.read_text(encoding='utf-8')
+        
+        # Step 3: AI extraction
+        extractor = AiExtractor()
+        ai_result = extractor.extract(cleaned_html)
+        
+        if ai_result and ai_result.get("success"):
+            # Save extracted JSON to temp file for download
+            json_output_path = input_path.parent / f"{input_path.stem}_extracted.json"
+            import json
+            json_output_path.write_text(json.dumps(ai_result["data"], ensure_ascii=False, indent=2), encoding='utf-8')
+            
+            return {
+                "message": "Deep clean successful",
+                "mode": "ai_extraction",
+                "temp_id": json_output_path.name,
+                "original_name": file.filename,
+                "stats": stats,
+                "extracted_data": ai_result["data"],
+                "tokens_used": ai_result.get("tokens_used", {})
+            }
+        else:
+            # AI failed - fallback to light clean
+            logger.warning(f"AI extraction failed, falling back to light clean: {ai_result}")
+            return {
+                "message": "AI extraction failed, returning light clean result",
+                "mode": "fallback",
+                "temp_id": output_path.name,
+                "original_name": file.filename,
+                "stats": stats,
+                "ai_error": ai_result.get("error") if ai_result else "AI service unavailable"
+            }
+        
+    except Exception as e:
+        logger.error(f"Deep clean failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Cleanup input file immediately
+        if 'input_path' in locals() and input_path.exists():
+            try:
+                os.unlink(input_path)
+            except:
+                pass
+
+
+@router.get("/temp-json/{filename}")
+async def download_temp_json(filename: str):
+    """
+    Download a temporary extracted JSON file.
+    """
+    temp_dir = Path(tempfile.gettempdir())
+    file_path = temp_dir / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found or expired")
+        
+    return FileResponse(
+        path=file_path,
+        filename=filename,
+        media_type="application/json"
+    )

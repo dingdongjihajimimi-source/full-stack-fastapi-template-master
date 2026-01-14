@@ -1,4 +1,4 @@
-import { Bot, Briefcase, Home, MessageSquare, Users } from "lucide-react"
+import { Home, Package, MessageCircle, Sparkles, MousePointer, Factory, Eraser, Settings } from "lucide-react"
 
 import { SidebarAppearance } from "@/components/Common/Appearance"
 import { Logo } from "@/components/Common/Logo"
@@ -14,20 +14,19 @@ import { User } from "./User"
 
 const baseItems: Item[] = [
   { icon: Home, title: "Dashboard", path: "/" },
-  { icon: Briefcase, title: "Items", path: "/items" },
-  { icon: MessageSquare, title: "Chat", path: "/chat" },
-  { icon: MessageSquare, title: "Chat", path: "/chat" },
-  { icon: Bot, title: "Auto Crawler", path: "/crawler/auto" },
-  { icon: Users, title: "Manual Scraper", path: "/crawler/manual" }, // Temporary icon
-  { icon: Home, title: "Industrial Harvest", path: "/crawler/industrial" }, // Temporary icon
+  { icon: Package, title: "Items", path: "/items" },
+  { icon: MessageCircle, title: "Chat", path: "/chat" },
+  { icon: Sparkles, title: "Auto Crawler", path: "/crawler/auto" },
+  { icon: MousePointer, title: "Manual Scraper", path: "/crawler/manual" },
+  { icon: Factory, title: "Industrial Harvest", path: "/crawler/industrial" },
+  { icon: Eraser, title: "Data Cleaning", path: "/crawler/cleaning" },
+  { icon: Settings, title: "Admin", path: "/admin" },
 ]
 
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
 
-  const items = currentUser?.is_superuser
-    ? [...baseItems, { icon: Users, title: "Admin", path: "/admin" }]
-    : baseItems
+  const items = baseItems
 
   return (
     <Sidebar collapsible="icon">

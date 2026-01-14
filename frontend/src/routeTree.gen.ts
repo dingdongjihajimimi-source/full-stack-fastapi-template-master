@@ -22,6 +22,7 @@ import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
 import { Route as LayoutCrawlerAutoRouteImport } from './routes/_layout/crawler/auto'
 import { Route as LayoutCrawlerManualRouteImport } from './routes/_layout/crawler/manual'
 import { Route as LayoutCrawlerIndustrialRouteImport } from './routes/_layout/crawler/industrial'
+import { Route as LayoutCrawlerCleaningRouteImport } from './routes/_layout/crawler/cleaning'
 
 const SignupRoute = SignupRouteImport.update({
     id: '/signup',
@@ -87,6 +88,11 @@ const LayoutCrawlerIndustrialRoute = LayoutCrawlerIndustrialRouteImport.update({
     path: '/crawler/industrial',
     getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutCrawlerCleaningRoute = LayoutCrawlerCleaningRouteImport.update({
+    id: '/_layout/crawler/cleaning',
+    path: '/crawler/cleaning',
+    getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
     '/login': typeof LoginRoute
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
     '/crawler/auto': typeof LayoutCrawlerAutoRoute
     '/crawler/manual': typeof LayoutCrawlerManualRoute
     '/crawler/industrial': typeof LayoutCrawlerIndustrialRoute
+    '/crawler/cleaning': typeof LayoutCrawlerCleaningRoute
 }
 export interface FileRoutesByTo {
     '/login': typeof LoginRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
     '/crawler/auto': typeof LayoutCrawlerAutoRoute
     '/crawler/manual': typeof LayoutCrawlerManualRoute
     '/crawler/industrial': typeof LayoutCrawlerIndustrialRoute
+    '/crawler/cleaning': typeof LayoutCrawlerCleaningRoute
 }
 export interface FileRoutesById {
     __root__: typeof rootRouteImport
@@ -131,6 +139,7 @@ export interface FileRoutesById {
     '/_layout/crawler/auto': typeof LayoutCrawlerAutoRoute
     '/_layout/crawler/manual': typeof LayoutCrawlerManualRoute
     '/_layout/crawler/industrial': typeof LayoutCrawlerIndustrialRoute
+    '/_layout/crawler/cleaning': typeof LayoutCrawlerCleaningRoute
 }
 export interface FileRouteTypes {
     fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,6 +156,7 @@ export interface FileRouteTypes {
     | '/crawler/auto'
     | '/crawler/manual'
     | '/crawler/industrial'
+    | '/crawler/cleaning'
     fileRoutesByTo: FileRoutesByTo
     to:
     | '/login'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/crawler/auto'
     | '/crawler/manual'
     | '/crawler/industrial'
+    | '/crawler/cleaning'
     id:
     | '__root__'
     | '/_layout'
@@ -279,6 +290,13 @@ declare module '@tanstack/react-router' {
             preLoaderRoute: typeof LayoutCrawlerIndustrialRouteImport
             parentRoute: typeof LayoutRoute
         }
+        '/_layout/crawler/cleaning': {
+            id: '/_layout/crawler/cleaning'
+            path: '/crawler/cleaning'
+            fullPath: '/crawler/cleaning'
+            preLoaderRoute: typeof LayoutCrawlerCleaningRouteImport
+            parentRoute: typeof LayoutRoute
+        }
     }
 }
 
@@ -291,6 +309,7 @@ interface LayoutRouteChildren {
     LayoutCrawlerAutoRoute: typeof LayoutCrawlerAutoRoute
     LayoutCrawlerManualRoute: typeof LayoutCrawlerManualRoute
     LayoutCrawlerIndustrialRoute: typeof LayoutCrawlerIndustrialRoute
+    LayoutCrawlerCleaningRoute: typeof LayoutCrawlerCleaningRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
@@ -302,6 +321,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
     LayoutCrawlerAutoRoute: LayoutCrawlerAutoRoute,
     LayoutCrawlerManualRoute: LayoutCrawlerManualRoute,
     LayoutCrawlerIndustrialRoute: LayoutCrawlerIndustrialRoute,
+    LayoutCrawlerCleaningRoute: LayoutCrawlerCleaningRoute,
 }
 
 const LayoutRouteWithChildren =

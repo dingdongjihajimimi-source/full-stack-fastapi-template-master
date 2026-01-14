@@ -4,6 +4,7 @@ import asyncio
 import random
 import math
 import hashlib
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
@@ -108,37 +109,53 @@ class IndustrialCollector:
         date_dir.mkdir(parents=True, exist_ok=True)
         return date_dir / f"{content_md5}{extension}"
     
-    def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str) -> bool:
-        """Save content using hybrid file+DB storage with MD5 deduplication."""
+    def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str, local_dir: Optional[Path] = None) -> bool:
+        """
+        Save content using hybrid file+DB storage with MD5 deduplication.
+        If local_dir is provided, also saves a copy there for task-specific visibility.
+        """
         try:
             # Calculate hashes
             url_hash = self._calculate_md5(url.encode())
             content_md5 = self._calculate_md5(content)
             
-            # Check for duplicate content
+            # Determine extension
+            ext = ".json" if "json" in content_type else ".html"
+            
+            # 1. Handle Local Task Storage (Always save here if requested, regardless of global dupe)
+            if local_dir:
+                local_dir.mkdir(parents=True, exist_ok=True)
+                # Keep original filename segments for local visibility
+                url_seg = url.split("?")[0].split("/")[-1]
+                url_seg = "".join([c for c in url_seg if c.isalnum() or c in "._-"])[:30]
+                if not url_seg:
+                    url_seg = "index" if ext == ".html" else "data"
+                
+                local_path = local_dir / f"{url_seg}_{content_md5[:8]}{ext}"
+                local_path.write_bytes(content)
+                logger.debug(f"Saved local copy: {local_path.name}")
+
+            # 2. Handle Global Data Lake Storage
             with Session(engine) as db:
                 existing = db.query(CrawlIndex).filter(
                     CrawlIndex.content_md5 == content_md5
                 ).first()
                 
                 if existing:
-                    logger.debug(f"Duplicate content detected (MD5: {content_md5[:8]}), skipping write")
-                    # Update timestamp only
+                    logger.debug(f"Duplicate content detected in global lake (MD5: {content_md5[:8]})")
                     existing.updated_at = datetime.utcnow()
                     db.commit()
-                    return False  # Didn't write new file
+                    return True # Still return True because data was "handled"
                 
-                # Determine extension
-                ext = ".json" if "json" in content_type else ".html"
                 file_path = self._get_storage_path(content_md5, ext)
                 
-                # Write file
+                # Write to global pool
                 file_path.write_bytes(content)
                 
                 # Create DB index
                 index_entry = CrawlIndex(
                     url_hash=url_hash,
-                    original_url=url[:2048],  # Truncate if too long
+                    original_url=url[:2048],
                     file_path=str(file_path.relative_to(self.storage_root)),
                     content_md5=content_md5,
                     content_type=content_type,
@@ -147,8 +164,8 @@ class IndustrialCollector:
                 db.add(index_entry)
                 db.commit()
                 
-                logger.debug(f"Saved to hybrid storage: {file_path.name}")
-                return True  # Wrote new file
+                logger.debug(f"Saved to global hybrid storage: {file_path.name}")
+                return True
                 
         except Exception as e:
             logger.error(f"Hybrid storage error: {e}")
@@ -183,40 +200,55 @@ class IndustrialCollector:
         # Convert to string for analysis
         json_str = json.dumps(json_data, ensure_ascii=False)
         
-        # Size filter: too small = likely config/metadata
-        if len(json_str) < 200:
-            logger.debug(f"Skipping small JSON ({len(json_str)} bytes): {url}")
+        # Size filter: too small = likely config/metadata (lowered threshold)
+        if len(json_str) < 100:
+            logger.debug(f"[Filter] Tiny JSON ({len(json_str)} bytes): {url[:80]}")
             return False
         
         # Keyword blacklist: analytics, tracking, telemetry
         garbage_keywords = [
             "analytics", "sentry", "tracking", "telemetry", 
             "gtag", "gtm", "pixel", "amplitude", "mixpanel",
-            "i18n", "locale", "translation", "__webpack"
+            "i18n", "locale", "translation", "__webpack",
+            "hotjar", "segment", "heap"
         ]
         
         url_lower = url.lower()
         for keyword in garbage_keywords:
             if keyword in url_lower:
-                logger.debug(f"Skipping garbage JSON (keyword '{keyword}'): {url}")
+                logger.debug(f"[Filter] Garbage keyword '{keyword}': {url[:80]}")
                 return False
         
         # Heuristic: Check if contains valuable data keys
-        # Look for common data structure indicators
-        valuable_indicators = ["data", "items", "list", "results", "products", "posts"]
+        # Look for common data structure indicators (expanded list)
+        valuable_indicators = [
+            "data", "items", "list", "results", "products", "posts",
+            "content", "records", "entries", "articles", "goods",
+            "catalog", "inventory", "feeds", "payload"
+        ]
+        
         if isinstance(json_data, dict):
             keys_str = " ".join(str(k).lower() for k in json_data.keys())
             if any(indicator in keys_str for indicator in valuable_indicators):
+                logger.debug(f"[Accept] Valuable indicator found: {url[:80]}")
+                return True
+            
+            # LOOSENED: Accept large dicts even without specific indicators
+            if len(json_str) >= 800:  # Lowered from 500
+                logger.debug(f"[Accept] Large dict ({len(json_str)} bytes): {url[:80]}")
                 return True
         
-        # If it's an array with multiple items, likely valuable
-        if isinstance(json_data, list) and len(json_data) > 3:
+        # If it's an array with multiple items, likely valuable (lowered threshold)
+        if isinstance(json_data, list) and len(json_data) > 2:  # Was > 3
+            logger.debug(f"[Accept] Array with {len(json_data)} items: {url[:80]}")
             return True
         
-        # Medium-sized dict without blacklisted keywords = likely valuable
-        if isinstance(json_data, dict) and len(json_str) >= 500:
+        # Medium-sized content generally accepted (lowered threshold)
+        if len(json_str) >= 300:  # Was >= 500
+            logger.debug(f"[Accept] Medium-sized JSON ({len(json_str)} bytes): {url[:80]}")
             return True
         
+        logger.debug(f"[Filter] No match for quality criteria: {url[:80]}")
         return False
 
     async def harvest(self, url: str, output_dir: Path, config: Dict[str, Any], progress_callback: Optional[Any] = None) -> int:
@@ -325,6 +357,26 @@ class IndustrialCollector:
                 # Final stabilization: wait for any pending requests
                 logger.info("Final network stabilization...")
                 await self._wait_for_network_idle(page, timeout=3000)
+
+                # --- EXTRACTION PHASE (Inside active page context) ---
+                
+                # Extract SSR Data
+                try:
+                    await self._extract_ssr_data(page, output_dir, progress_callback)
+                except Exception as e:
+                    logger.warning(f"SSR extraction failed: {e}")
+                
+                # Extract JSON from script tags
+                try:
+                    await self._extract_script_json(page, output_dir, progress_callback)
+                except Exception as e:
+                    logger.warning(f"Script JSON extraction failed: {e}")
+
+                # Capture Visual Evidence (Screenshot)
+                try:
+                    await self._capture_evidence(page, output_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to capture visual evidence: {e}")
                 
             finally:
                 await page.close()
@@ -341,21 +393,32 @@ class IndustrialCollector:
                     await local_playwright.stop()
                 logger.info("Local Browser closed")
 
-        # Extract SSR Data before closing
-        try:
-            await self._extract_ssr_data(page, output_dir, progress_callback)
-        except Exception as e:
-            logger.warning(f"SSR extraction failed: {e}")
-
         # Save Metadata
         self._save_metadata(url, output_dir, config)
+        
+        # Provide intelligent feedback if zero items collected
+        
+        # Provide intelligent feedback if zero items collected
+        if self.collected_count == 0:
+            logger.warning("=" * 60)
+            logger.warning("ZERO ITEMS HARVESTED - Diagnostic Summary:")
+            logger.warning(f"Target URL: {url}")
+            logger.warning("Possible reasons:")
+            logger.warning(" 1. Page is BLOCKING access (Check 'evidence_screenshot.png' in files)")
+            logger.warning(" 2. Page is captcha-protected (Check logs for [CAPTCHA] warnings)")
+            logger.warning(" 3. Data is loaded via complex client-side rendering not captured by response interception")
+            logger.warning(" 4. JSON quality filters rejected all responses (check [Filter] logs)")
+            logger.warning("Recommendations:")
+            logger.warning(" - VIEW THE SCREENSHOT to see what the crawler sees!")
+            logger.warning(" - Try increasing scroll_count and wait_until='networkidle'")
+            logger.warning("=" * 60)
+        else:
+            logger.info(f"""Harvest Complete: {self.collected_count} items collected.""")
+        
         return self.collected_count
         
     async def _extract_ssr_data(self, page: Page, output_dir: Path, progress_callback: Optional[Any] = None):
-        """Extract SSR (Server-Side Rendered) data from page scripts."""
-        ssr_dir = output_dir / "ssr_data"
-        ssr_dir.mkdir(exist_ok=True)
-        
+        """Extract SSR data and save directly to task root."""
         # Common SSR patterns
         patterns = [
             "window.__INITIAL_STATE__",
@@ -371,17 +434,61 @@ class IndustrialCollector:
                 if result:
                     self.collected_count += 1
                     pattern_name = pattern.replace("window.", "").replace("__", "")
-                    filename = f"ssr_{self.collected_count:04d}_{pattern_name}.json"
-                    (ssr_dir / filename).write_text(result)
+                    filename = f"ssr_{pattern_name}_{self.collected_count:04d}.json"
+                    (output_dir / filename).write_text(result)
                     logger.info(f"Extracted SSR data: {pattern}")
                     
                     if self.collected_count % 5 == 0 and progress_callback:
                         try:
-                            await progress_callback(self.collected_count)
+                                await progress_callback(self.collected_count)
                         except Exception:
                             pass
             except Exception as e:
                 logger.debug(f"Pattern {pattern} not found or failed: {e}")
+
+    async def _extract_script_json(self, page: Page, output_dir: Path, progress_callback: Optional[Any] = None):
+        """Extract JSON data from <script> tags and save directly to task root."""
+        scripts = await page.evaluate("""
+            Array.from(document.querySelectorAll('script[type="application/json"], script:not([src])'))
+                 .map(script => script.textContent)
+        """)
+
+        for i, script_content in enumerate(scripts):
+            if not script_content: continue
+            try:
+                match = re.search(r'(\{.*\}|\[.*\])', script_content, re.DOTALL)
+                if match:
+                    json_str = match.group(0)
+                    json_data = json.loads(json_str)
+
+                    if self._is_quality_json(json_data, page.url):
+                        self.collected_count += 1
+                        filename = f"script_json_{i}_{self.collected_count:04d}.json"
+                        (output_dir / filename).write_text(json.dumps(json_data, indent=2, ensure_ascii=False))
+                        logger.info(f"Extracted script JSON: {filename}")
+
+                        if self.collected_count % 5 == 0 and progress_callback:
+                            try: await progress_callback(self.collected_count)
+                            except Exception: pass
+            except Exception: continue
+
+    async def _capture_evidence(self, page: Page, output_dir: Path):
+        """Capture screenshot and HTML snapshot for diagnostics."""
+        try:
+            timestamp = datetime.now().strftime("%H%M%S")
+            
+            # Screenshot
+            screenshot_path = output_dir / f"evidence_{timestamp}.png"
+            await page.screenshot(path=str(screenshot_path), full_page=False)
+            logger.info(f"Captured evidence screenshot: {screenshot_path.name}")
+            
+            # HTML Snapshot (lightweight)
+            # html_path = output_dir / f"evidence_{timestamp}.html"
+            # content = await page.content()
+            # html_path.write_text(content)
+            
+        except Exception as e:
+            logger.warning(f"Evidence capture failed: {e}")
 
     async def _inject_fingerprint_masking(self, page: Page):
         """Inject scripts to mask Canvas and WebGL fingerprints."""
@@ -593,7 +700,7 @@ class IndustrialCollector:
                                 
                                 # Use hybrid storage
                                 content_bytes = json.dumps(json_data, indent=2, ensure_ascii=False).encode('utf-8')
-                                self._save_to_hybrid_storage(response.url, content_bytes, "application/json")
+                                self._save_to_hybrid_storage(response.url, content_bytes, "application/json", local_dir=output_dir)
                                 logger.info(f"Heuristic JSON captured: {response.url}")
                                 
                                 # Non-blocking callback (fire and forget)
@@ -607,19 +714,23 @@ class IndustrialCollector:
                 except Exception:
                     pass
 
-            # HTML: Save main page only once, don't count it
+            # HTML: Save main page only once
             if "text/html" in content_type:
                 if not self.html_saved:
                     try:
                         body = await response.body()
                         if body:
                             # Use hybrid storage for HTML too
-                            self._save_to_hybrid_storage(response.url, body, "text/html")
-                            self.html_saved = True
-                            logger.info("Saved main HTML page (hybrid storage)")
+                            if self._save_to_hybrid_storage(response.url, body, "text/html", local_dir=output_dir):
+                                self.html_saved = True
+                                self.collected_count += 1 # Count the HTML page itself as a data point
+                                logger.info("Saved main HTML page (hybrid storage)")
+                                
+                                if progress_callback:
+                                    asyncio.create_task(self._safe_callback(progress_callback, self.collected_count))
                     except Exception:
                         pass
-                return  # Don't count HTML toward max_items
+                return
 
             # Skip images and other non-data assets
             if any(ct in content_type for ct in ["image/", "video/", "font/", "text/css"]):

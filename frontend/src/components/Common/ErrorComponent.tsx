@@ -1,7 +1,20 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
 const ErrorComponent = () => {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // If there's a stored token but we're on the error page,
+    // it's likely the token is invalid. Clear it and redirect to login.
+    const token = localStorage.getItem("access_token")
+    if (token) {
+      localStorage.removeItem("access_token")
+      navigate({ to: "/login" })
+    }
+  }, [navigate])
+
   return (
     <div
       className="flex min-h-screen items-center justify-center flex-col p-4"

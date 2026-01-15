@@ -13,10 +13,16 @@ import { Toaster } from "./components/ui/sonner"
 import "./index.css"
 import { routeTree } from "./routeTree.gen"
 
+
 OpenAPI.BASE = import.meta.env.VITE_API_URL
 OpenAPI.TOKEN = async () => {
-  return localStorage.getItem("access_token") || ""
+  const token = localStorage.getItem("access_token") || ""
+  if (import.meta.env.DEV) {
+    console.log("[Auth Debug] Token retrieved:", token ? `${token.substring(0, 20)}...` : "(empty)")
+  }
+  return token
 }
+
 
 const handleApiError = (error: Error) => {
   if (error instanceof ApiError && [401, 403].includes(error.status)) {

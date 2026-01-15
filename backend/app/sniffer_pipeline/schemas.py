@@ -18,5 +18,5 @@ class ExtractionStrategy(BaseModel):
 
 class RawDataBlock(BaseModel):
     url: str
-    data: Any  # The JSON object or list
+    data: Any  # JSON 对象或列表
     timestamp: float

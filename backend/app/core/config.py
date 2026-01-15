@@ -25,19 +25,19 @@ def parse_cors(v: Any) -> list[str] | str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        # Use top level .env file (one level above ./backend/)
+        # 使用顶层 .env 文件（位于 ./backend/ 上一级）
         env_file="../.env",
         env_ignore_empty=True,
         extra="ignore",
     )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
-    # 60 minutes * 24 hours * 8 days = 8 days
+    # 60 分钟 * 24 小时 * 8 天 = 8 天
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:5173"
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
     
-    # AI Extraction (DeepSeek / Volcengine)
+    # AI 提取 (DeepSeek / 火山引擎)
     VOLC_API_KEY: str | None = None
     VOLC_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
     VOLC_DEEPSEEK_MODEL_ID: str | None = None
@@ -99,23 +99,23 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
-    # Volcengine (Doubao) Settings
+    # 火山引擎（豆包）设置
     VOLC_API_KEY: str | None = None
     VOLC_BASE_URL: str = "https://ark.cn-beijing.volces.com/api/v3"
-    VOLC_MODEL_ID: str | None = None  # Default (Chat/Doubao)
+    VOLC_MODEL_ID: str | None = None  # 默认 (聊天/豆包)
     VOLC_DEEPSEEK_MODEL_ID: str | None = None  # SQL/DeepSeek
 
-    # DeepSeek Settings
+    # DeepSeek 设置
     DEEPSEEK_API_KEY: str | None = None
     
-    # Storage Settings
+    # 存储设置
     STORAGE_ROOT_DIR: str = "backend/storage"
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (
-                f'The value of {var_name} is "changethis", '
-                "for security, please change it, at least for deployments."
+                f'{var_name} 的值为 "changethis"，'
+                "为了安全起见，请更改它，至少在部署时更改。"
             )
             if self.ENVIRONMENT == "local":
                 warnings.warn(message, stacklevel=1)

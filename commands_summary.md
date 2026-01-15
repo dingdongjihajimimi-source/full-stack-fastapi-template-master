@@ -1,60 +1,60 @@
-# Build and Run Commands
+# 构建和运行命令
 
-## Backend
+## 后端
 
-### Local Development
+### 本地开发
 
-**Option 1: Using `uv` (Recommended if installed)**
+**选项 1: 使用 `uv` (如果已安装，推荐)**
 ```bash
 cd backend
 uv run fastapi dev app/main.py
 ```
 
-**Option 2: Using existing virtual environment**
+**选项 2: 使用现有的虚拟环境**
 ```bash
-# Activate the virtual environment first
+# 首先激活虚拟环境
 source backend/venv/bin/activate
 cd backend
 fastapi dev app/main.py
 ```
-*Or run directly:*
+*或者直接运行:*
 ```bash
 ./backend/venv/bin/python -m fastapi dev backend/app/main.py
 ```
 
-### Build/Run with Docker
+### 使用 Docker 构建/运行
 ```bash
 docker compose build backend
 docker compose up -d backend
 ```
 
-## Frontend
+## 前端
 
-### Local Development (using `npm`)
+### 本地开发 (使用 `npm`)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### Build for Production
+### 生产环境构建
 ```bash
 cd frontend
 npm run build
 ```
 
-### Build/Run with Docker
+### 使用 Docker 构建/运行
 ```bash
 docker compose build frontend
 docker compose up -d frontend
 ```
 
-## Entire Stack
-To build and run everything at once:
+## 整个技术栈
+一次性构建并运行所有内容:
 ```bash
 docker compose up -d --build
 ```
-To watch for changes (development mode):
+监听变更 (开发模式):
 ```bash
 docker compose watch
 ```

@@ -36,7 +36,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 )
 def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
     """
-    Retrieve users.
+    检索用户列表。
     """
 
     count_statement = select(func.count()).select_from(User)
@@ -53,7 +53,7 @@ def read_users(session: SessionDep, skip: int = 0, limit: int = 100) -> Any:
 )
 def create_user(*, session: SessionDep, user_in: UserCreate) -> Any:
     """
-    Create new user.
+    创建新用户。
     """
     user = crud.get_user_by_email(session=session, email=user_in.email)
     if user:
@@ -80,7 +80,7 @@ def update_user_me(
     *, session: SessionDep, user_in: UserUpdateMe, current_user: CurrentUser
 ) -> Any:
     """
-    Update own user.
+    更新当前用户信息。
     """
 
     if user_in.email:
@@ -102,7 +102,7 @@ def update_password_me(
     *, session: SessionDep, body: UpdatePassword, current_user: CurrentUser
 ) -> Any:
     """
-    Update own password.
+    更新当前用户密码。
     """
     if not verify_password(body.current_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect password")
@@ -120,7 +120,7 @@ def update_password_me(
 @router.get("/me", response_model=UserPublic)
 def read_user_me(current_user: CurrentUser) -> Any:
     """
-    Get current user.
+    获取当前用户。
     """
     return current_user
 
@@ -128,7 +128,7 @@ def read_user_me(current_user: CurrentUser) -> Any:
 @router.delete("/me", response_model=Message)
 def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
     """
-    Delete own user.
+    删除当前用户。
     """
     if current_user.is_superuser:
         raise HTTPException(
@@ -142,7 +142,7 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
 @router.post("/signup", response_model=UserPublic)
 def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
-    Create new user without the need to be logged in.
+    注册新用户（无需登录）。
     """
     user = crud.get_user_by_email(session=session, email=user_in.email)
     if user:
@@ -160,7 +160,7 @@ def read_user_by_id(
     user_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> Any:
     """
-    Get a specific user by id.
+    通过 ID 获取特定用户。
     """
     user = session.get(User, user_id)
     if user == current_user:
@@ -185,7 +185,7 @@ def update_user(
     user_in: UserUpdate,
 ) -> Any:
     """
-    Update a user.
+    更新用户信息。
     """
 
     db_user = session.get(User, user_id)
@@ -210,7 +210,7 @@ def delete_user(
     session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
 ) -> Message:
     """
-    Delete a user.
+    删除用户。
     """
     user = session.get(User, user_id)
     if not user:

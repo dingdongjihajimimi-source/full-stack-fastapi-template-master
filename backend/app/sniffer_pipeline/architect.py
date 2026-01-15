@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class Architect:
     """
-    Phase 2: Data Architect (AI)
-    Analyzes API response samples and defines an extraction strategy.
+    第二阶段：数据架构师 (AI)
+    分析 API 响应样本并定义提取策略。
     """
     def __init__(self):
         self.client = AsyncOpenAI(
@@ -22,7 +22,7 @@ class Architect:
 
     async def define_extraction_strategy(self, candidates: List[Candidate], table_name_hint: Optional[str] = None, task_id: str = "Unknown", log_callback=None) -> ExtractionStrategy:
         """
-        Phase 2: Analyze candidates and define the extraction strategy.
+        第二阶段：分析候选者并定义提取策略。
         """
         async def _log(msg, level="INFO"):
             logger.info(f"[{task_id}] {msg}")
@@ -34,7 +34,7 @@ class Architect:
 
         await _log(f"Architect analyzing {len(candidates)} candidates...")
 
-        # Prepare summary for AI (limit token usage)
+        # 为 AI 准备摘要（限制 token 使用）
         summary = []
         for c in candidates:
             summary.append({

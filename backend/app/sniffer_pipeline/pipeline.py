@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 class SnifferPipeline:
     """
-    Autonomous 'Scout-Harvest-Refine' Pipeline.
-    Supports pausing, resuming, and status tracking.
+    自主“侦察-收割-精炼”管道。
+    支持暂停、恢复和状态跟踪。
     """
     def __init__(self):
         self.scout = Scout()
@@ -29,14 +29,14 @@ class SnifferPipeline:
         review_mode: bool = False
     ):
         """
-        Executes the pipeline.
+        执行管道。
         
-        Args:
-            url: Target URL
-            task_id: Unique ID for the task (used for logging/state)
-            update_callback: Async function(task_id, phase, state_data) to persist state
-            table_name_hint: Optional table name to suggest to AI
-            review_mode: If True, pauses after Phase 2 for user confirmation
+        参数:
+            url: 目标 URL
+            task_id: 任务的唯一 ID（用于日志/状态）
+            update_callback: 用于持久化状态的异步函数(task_id, phase, state_data)
+            table_name_hint: 建议 AI 使用的可选表名
+            review_mode: 如果为 True，则在第 2 阶段后暂停以等待用户确认
         """
         
         async def _notify(phase: str, state_data: Dict[str, Any] = None):
@@ -46,7 +46,7 @@ class SnifferPipeline:
 
         async def _log(message: str, phase: str, level: str = "INFO"):
             """
-            Enhanced logging helper.
+            增强型日志助手。
             """
             log_msg = f"[{task_id}] {message}"
             if level == "ERROR":
@@ -59,8 +59,8 @@ class SnifferPipeline:
                 logger.info(log_msg)
                 
             if update_callback:
-                # Pass plain message to frontend, maybe with a level prefix if needed
-                # But frontend usually just displays lines. We can prefix meaningful icons or colors if we want.
+                # 将纯文本消息传递给前端，如果需要，可能带有级别前缀
+                # 因为前端通常只显示行。如果需要，我们可以加上有意义的图标或颜色前缀。
                 prefix = ""
                 if level == "ERROR": prefix = "❌ "
                 elif level == "WARN": prefix = "⚠️ "
@@ -116,7 +116,7 @@ class SnifferPipeline:
         update_callback=None
     ):
         """
-        Resumes the pipeline from Phase 3 (Harvester) with a (potentially modified) strategy.
+        使用（可能已修改的）策略从第 3 阶段（收割者）恢复管道。
         """
         async def _notify(phase: str, state_data: Dict[str, Any] = None):
             logger.info(f"[{task_id}] Phase Update: {phase}")

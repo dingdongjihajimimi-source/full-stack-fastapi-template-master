@@ -7,23 +7,23 @@ if TYPE_CHECKING:
     from .user import User
 
 
-# Shared properties
+# 共享属性
 class ItemBase(SQLModel):
     title: str = Field(min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=255)
 
 
-# Properties to receive on item creation
+# 创建项目时接收的属性
 class ItemCreate(ItemBase):
     pass
 
 
-# Properties to receive on item update
+# 更新项目时接收的属性
 class ItemUpdate(ItemBase):
     title: str | None = Field(default=None, min_length=1, max_length=255)  # type: ignore
 
 
-# Database model, database table inferred from class name
+# 数据库模型，数据库表名由类名推断
 class Item(ItemBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     title: str = Field(max_length=255)
@@ -31,7 +31,7 @@ class Item(ItemBase, table=True):
     owner: "User" = Relationship(back_populates="items")
 
 
-# Properties to return via API, id is always required
+# 通过 API 返回的属性，id 总是必须的
 class ItemPublic(ItemBase):
     id: uuid.UUID
     owner_id: uuid.UUID

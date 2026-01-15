@@ -24,7 +24,7 @@ SQL_DIR = GENERATED_DATA_DIR / "sql"
 CSV_DIR.mkdir(parents=True, exist_ok=True)
 SQL_DIR.mkdir(parents=True, exist_ok=True)
 
-# Common User-Agents list for rotation
+# 用于轮换的常见用户代理列表
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -34,7 +34,7 @@ USER_AGENTS = [
 ]
 
 def get_random_headers():
-    """Generate random headers for anti-crawling evasion."""
+    """生成随机请求头以规避反爬虫。"""
     return {
         "User-Agent": random.choice(USER_AGENTS),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -51,11 +51,11 @@ def get_random_headers():
 
 def get_next_page_url(current_url: str, html_content: str) -> str | None:
     """
-    Determine the next page URL using regex heuristics or HTML parsing.
+    使用正则启发式或 HTML 解析确定下一页 URL。
     """
-    # Strategy A: Regex Heuristics (e.g. page=1, /page/1)
-    # Match patterns like ?page=123 or /page/123
-    # Group 1: prefix, Group 2: page number, Group 3: suffix
+    # 策略 A：正则启发式 (例如 page=1, /page/1)
+    # 匹配类似 ?page=123 或 /page/123 的模式
+    # 第一组：前缀，第二组：页码，第三组：后缀
     page_patterns = [
         r"([?&]page=)(\d+)",
         r"(/page/)(\d+)"
@@ -66,14 +66,14 @@ def get_next_page_url(current_url: str, html_content: str) -> str | None:
         if match:
             current_page_num = int(match.group(2))
             next_page_num = current_page_num + 1
-            # Replace only the first occurrence
+            # 仅替换第一次出现
             next_url = current_url[:match.start(2)] + str(next_page_num) + current_url[match.end(2):]
             return next_url
 
-    # Strategy B: HTML Parsing (BeautifulSoup)
+    # 策略 B：HTML 解析 (BeautifulSoup)
     try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        # Look for <a> tags with text like "Next", "下一页", ">"
+        # 查找带有“Next”、“下一页”、“>”等文本的 <a> 标签
         next_keywords = ["next", "下一页", ">", "more"]
         
         for a in soup.find_all('a', href=True):
@@ -99,20 +99,20 @@ async def process_page(
     session_updater
 ) -> str | None:
     """
-    Process a single page/item concurrently.
-    Pipeline: Crawl -> Save CSV -> AI -> Save SQL
-    Returns: Next Page URL (if found) or None
+    并发处理单个页面/项目。
+    管道：爬取 -> 保存 CSV -> AI -> 保存 SQL
+    返回：下一页 URL（如果找到）或 None
     """
     async with semaphore:
         try:
-            # Step 1: Crawl (Using httpx)
+            # 步骤 1：爬取 (使用 httpx)
             target_url = url
             next_page_url = None
             
             if "example.com" not in url and "localhost" not in url:
-                # Try real fetch
+                # 尝试真实抓取
                 try:
-                    # Random delay for anti-crawling
+                    # 反爬虫随机延迟
                     await asyncio.sleep(random.uniform(0.5, 2.0))
                     
                     async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=get_random_headers()) as http_client:
@@ -121,17 +121,17 @@ async def process_page(
                         html_content = resp.text
                         status_code = resp.status_code
                         
-                        # Try to find next page
+                        # 尝试查找下一页
                         next_page_url = get_next_page_url(target_url, html_content)
                         
-                        # Increase limit for AI context (2000 -> 20000)
+                        # 增加 AI 上下文限制 (2000 -> 20000)
                         raw_content = html_content[:20000] 
                 except Exception as e:
                     raw_content = f"Error fetching {target_url}: {str(e)}"
                     status_code = 500
                     html_content = ""
             else:
-                # Mock Data Generation
+                # 模拟数据生成
                 await asyncio.sleep(0.5) 
                 status_code = 200
                 html_content = f"<html><body><p>Mock Content for {url}</p></body></html>"
@@ -143,27 +143,27 @@ async def process_page(
                     "source_url": url,
                     "page": page_index
                 })
-                # Mock pagination logic: if url has 'page', increment it
+                # 模拟分页逻辑：如果 url 有 'page'，则增加它
                 next_page_url = get_next_page_url(url, html_content)
                 if not next_page_url:
-                     # Fallback mock heuristic if regex failed (e.g. if url has no page param)
+                     # 如果正则失败，回退到模拟启发式 (例如如果 url 没有 page 参数)
                      if "?" not in url:
                          next_page_url = f"{url}?page={page_index + 1}"
                      elif "page=" not in url:
                          next_page_url = f"{url}&page={page_index + 1}"
 
-            # Step 2: Save to CSV (Preliminary with metadata)
-            # We will update this row later with AI extracted data
+            # 步骤 2：保存到 CSV (带有元数据的初步保存)
+            # 稍后我们将使用 AI 提取的数据更新此行
             csv_row = {
                 "page_index": page_index,
                 "url": target_url,
                 "status": status_code,
             }
             
-            # Step 3: AI Processing
+            # 步骤 3：AI 处理
             columns_str = ", ".join(columns)
             
-            # Provide metadata to AI so it can use it if requested in columns
+            # 向 AI 提供元数据，以便在列中请求时可以使用它
             metadata_info = f"Page Index: {page_index}, URL: {target_url}, Status: {status_code}"
             
             prompt = f"""
@@ -209,28 +209,28 @@ async def process_page(
                     extracted_data = json.loads(content)
                 else:
                     await asyncio.sleep(0.5)
-                    # Mock extracted data for demo/testing
+                    # 用于演示/测试的模拟提取数据
                     extracted_data = {col: f"Mock {col} {page_index}" for col in columns}
                     if "price" in extracted_data: extracted_data["price"] = 10.5 + page_index
                     if "url" in columns: extracted_data["url"] = target_url
 
-                # Filter and clean extracted data
+                # 过滤并清理提取的数据
                 valid_data = {}
                 for col in columns:
                     val = extracted_data.get(col)
-                    # Convert None/null to string 'NULL' for SQL or keep as None for CSV
+                    # 将 None/null 转换为字符串 'NULL' 用于 SQL，或保留为 None 用于 CSV
                     if val is None or val == "None" or val == "null":
                         valid_data[col] = None
                     else:
                         valid_data[col] = val
 
-                # Construct SQL from extracted data
+                # 从提取的数据构造 SQL
                 cols = []
                 vals = []
                 for k, v in valid_data.items():
                     if v is not None:
                         cols.append(k)
-                        # Escape single quotes for SQL
+                        # 为 SQL 转义单引号
                         escaped_val = str(v).replace("'", "''")
                         vals.append(f"'{escaped_val}'")
                 
@@ -239,19 +239,19 @@ async def process_page(
                 else:
                     sql_result = f"-- No data could be extracted for {target_url}"
                 
-                # Update CSV row with extracted data (using None for missing values)
+                # 使用提取的数据更新 CSV 行 (缺失值使用 None)
                 csv_row.update(valid_data)
 
             except Exception as e:
                 print(f"AI extraction error: {e}")
                 sql_result = f"-- Error extracting data for {target_url}: {str(e)}"
 
-            # Finalize CSV (using a combined lock-protected write)
+            # 最终确定 CSV (使用组合的锁保护写入)
             async with csv_lock:
                 csv_file_path = CSV_DIR / f"{task_id}.csv"
                 file_exists = csv_file_path.exists()
                 
-                # Determine all fieldnames (metadata + user columns)
+                # 确定所有字段名称 (元数据 + 用户列)
                 fieldnames = ["page_index", "url", "status"] + columns
                 
                 await asyncio.get_running_loop().run_in_executor(
@@ -259,7 +259,7 @@ async def process_page(
                     lambda: _append_csv(csv_file_path, csv_row, file_exists, fieldnames)
                 )
 
-            # Step 4: Save to SQL
+            # 步骤 4：保存到 SQL
             if sql_result:
                 async with sql_lock:
                     sql_file_path = SQL_DIR / f"{task_id}.sql"
@@ -268,7 +268,7 @@ async def process_page(
                         lambda: _append_sql(sql_file_path, sql_result)
                     )
 
-            # Update Progress
+            # 更新进度
             await session_updater.increment()
             
             return next_page_url
@@ -310,24 +310,24 @@ class ProgressUpdater:
 
 async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str, columns: list[str], max_pages: int = 1, concurrency: int = 5):
     """
-    Background task to generate SQL from mock spider data using DeepSeek API.
-    Optimized for concurrency, file storage, and pagination.
+    使用 DeepSeek API 从模拟爬虫数据生成 SQL 的后台任务。
+    针对并发、文件存储和分页进行了优化。
     """
-    # Initialize locks
+    # 初始化锁
     csv_lock = asyncio.Lock()
     sql_lock = asyncio.Lock()
     semaphore = asyncio.Semaphore(concurrency)
     
-    # Initialize Progress Updater
+    # 初始化进度更新器
     updater = ProgressUpdater(task_id, max_pages)
 
-    # Initialize Client
+    # 初始化客户端
     client = AsyncOpenAI(
         api_key=settings.VOLC_API_KEY or "sk-placeholder", 
         base_url="https://ark.cn-beijing.volces.com/api/v3"
     )
 
-    # Create a new session to set initial status
+    # 创建新会话以设置初始状态
     with Session(engine) as session:
         task = session.get(CrawlerTask, task_id)
         if not task:
@@ -337,25 +337,25 @@ async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str
         session.commit()
 
     try:
-        # Determine strategy:
-        # If we can infer URLs (heuristic), we can generate them all and run concurrently.
-        # If not, we must run sequentially (or hybrid) to discover next pages.
+        # 确定策略：
+        # 如果我们能推断 URL（启发式），我们可以生成所有 URL 并并发运行。
+        # 否则，我们必须顺序（或混合）运行以发现下一页。
         
         urls_to_crawl = []
         
-        # Check heuristic first
+        # 首先检查启发式
         first_next_url = get_next_page_url(url, "")
         
         if first_next_url and first_next_url != url:
-             # Heuristic worked! We can pre-generate URLs
-             # E.g. url="...page=1", next="...page=2"
-             # We assume standard incrementing
-             # We can generate up to max_pages
+             # 启发式有效！我们可以预生成 URL
+             # 例如 url="...page=1", next="...page=2"
+             # 我们假设标准递增
+             # 我们可以生成最多 max_pages
              print("Heuristic URL generation active")
              base_url = url
              urls_to_crawl.append(base_url)
              
-             # Try to generate subsequent URLs
+             # 尝试生成后续 URL
              current_sim_url = base_url
              for _ in range(max_pages - 1):
                  next_sim_url = get_next_page_url(current_sim_url, "")
@@ -365,23 +365,23 @@ async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str
                  else:
                      break
         else:
-            # Heuristic failed or not applicable, we start with just the first URL
-            # and rely on HTML parsing (which means we can't fully pre-generate)
-            # But for the requested "concurrency", we can only run concurrent if we have URLs.
-            # If we depend on page N to find page N+1, concurrency is effectively 1 for discovery.
-            # However, if we are in Mock mode or have a list, we can run concurrent.
+            # 启发式失败或不适用，我们仅从第一个 URL 开始
+            # 并依赖 HTML 解析（这意味着我们无法完全预生成）
+            # 但对于请求的“并发”，只有在我们有 URL 时才能并发运行。
+            # 如果我们依赖第 N 页来查找第 N+1 页，则发现阶段的并发实际上为 1。
+            # 但是，如果我们在模拟模式下或拥有列表，我们可以并发运行。
             urls_to_crawl.append(url)
 
-        # Main Loop
+        # 主循环
         processed_count = 0
         current_batch_urls = urls_to_crawl
         
-        # We might need a queue-based approach if we discover URLs dynamically
-        # But for simplicity, let's process the initial batch (heuristic) 
-        # OR enter a dynamic loop if heuristic failed.
+        # 如果我们动态发现 URL，可能需要基于队列的方法
+        # 但为了简单起见，让我们处理初始批次 (启发式)
+        # 或者如果启发式失败进入动态循环。
         
         if len(current_batch_urls) >= max_pages or len(current_batch_urls) > 1:
-             # Case 1: We have enough URLs (Heuristic success), run concurrently
+             # 情况 1：我们有足够的 URL（启发式成功），并发运行
              tasks = []
              for i, target_url in enumerate(current_batch_urls[:max_pages]):
                  tasks.append(
@@ -400,8 +400,8 @@ async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str
                  )
              await asyncio.gather(*tasks)
         else:
-             # Case 2: Discovery Mode (Serial or Limited Concurrency)
-             # We fetch page 1, see if we get page 2, etc.
+             # 情况 2：发现模式（串行或有限并发）
+             # 我们抓取第 1 页，看是否得到第 2 页，依此类推。
              current_url = url
              for i in range(max_pages):
                  next_url = await process_page(
@@ -409,7 +409,7 @@ async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str
                      url=current_url,
                      table_name=table_name,
                      columns=columns,
-                     semaphore=semaphore, # Semaphore less useful here as we are serial
+                     semaphore=semaphore, # 信号量在这里用处不大，因为我们是串行的
                      csv_lock=csv_lock,
                      sql_lock=sql_lock,
                      client=client,
@@ -422,7 +422,7 @@ async def generate_sql_from_spider(task_id: uuid.UUID, url: str, table_name: str
                      break
                  current_url = next_url
 
-        # Final Status Update
+        # 最终状态更新
         with Session(engine) as session:
             task = session.get(CrawlerTask, task_id)
             if task:

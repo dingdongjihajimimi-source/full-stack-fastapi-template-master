@@ -32,7 +32,7 @@ class Refinery:
 
         await _log(f"Refinery started. Processing {len(raw_data_list)} raw data blocks...")
 
-        # 1. 编译转换函数 (Code Execution)
+        # 1. 编译转换函数 (代码执行)
         try:
             local_scope = {}
             # 执行 LLM 生成的 Python 代码

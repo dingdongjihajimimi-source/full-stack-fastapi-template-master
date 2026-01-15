@@ -16,7 +16,7 @@ class Harvester:
 
     async def run_harvest(self, url: str, strategy: ExtractionStrategy, max_scrolls: int = 5, task_id: str = "Unknown", log_callback=None) -> List[RawDataBlock]:
         """
-        Phase 3: Execute targeted harvesting based on the strategy.
+        第三阶段：根据策略执行目标收割。
         """
         async def _log(msg, level="INFO"):
             logger.info(f"[{task_id}] {msg}")
@@ -26,7 +26,7 @@ class Harvester:
         raw_data: List[RawDataBlock] = []
         user_agent = self.ua.random
         
-        # Compile regex for performance
+        # 编译正则表达式以提高性能
         try:
             pattern = re.compile(strategy.target_api_url_pattern)
         except re.error as e:
@@ -45,17 +45,17 @@ class Harvester:
             page = await context.new_page()
 
             async def handle_response(response: Response):
-                # Interceptor logic
+                # 拦截器逻辑
                 request = response.request
-                # Check if URL matches the target pattern
+                # 检查 URL 是否匹配目标模式
                 if pattern.search(request.url):
                     try:
-                        # Only care about successful responses
+                        # 只关注成功的响应
                         if response.ok:
                             content_type = response.headers.get("content-type", "").lower()
                             data = None
                             
-                            # Try parsing as JSON first
+                            # 尝试先解析为 JSON
                             if "application/json" in content_type or "text/json" in content_type:
                                 try:
                                     data = await response.json()
@@ -63,10 +63,10 @@ class Harvester:
                                 except:
                                     pass
                             
-                            # Fallback to Text/HTML
+                            # 回退到 Text/HTML
                             if data is None:
                                 text_content = await response.text()
-                                # Wrap HTML in a structure compatible with Refinery
+                                # 将 HTML 包装在与 Refinery 兼容的结构中
                                 data = {"html": text_content, "url": request.url, "content_type": content_type}
                                 await _log(f"Extracted HTML/Text ({len(text_content)} chars) from: {request.url}", "DEBUG")
 
@@ -82,7 +82,7 @@ class Harvester:
                     except Exception as e:
                         await _log(f"Failed to process response from target {request.url}: {e}", "WARN")
                 else:
-                    # Log ignored URLs at DEBUG level
+                    # 在 DEBUG 级别记录忽略的 URL
                     # await _log(f"Ignored: {request.url}", "DEBUG")
                     pass
 
@@ -91,13 +91,12 @@ class Harvester:
             try:
                 await page.goto(url, wait_until="networkidle", timeout=45000)
                 
-                # Active Harvesting Loop (Scroll/Paginate)
-                # In a real scenario, this might need to click "Next" buttons too, 
-                # but scrolling is a good baseline for infinite scroll APIs.
+                # 主动收割循环（滚动/分页）
+                # 在真实场景中，这可能也需要点击“下一页”按钮，但滚动是无限滚动 API 的良好基准。
                 for i in range(max_scrolls):
                     await _log(f"Harvester scrolling {i+1}/{max_scrolls}")
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    # Dynamic wait could be better, but fixed is safe for now
+                    # 动态等待可能更好，目前固定等待是安全的
                     await asyncio.sleep(4) 
                 
                 await asyncio.sleep(2)

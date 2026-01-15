@@ -63,7 +63,7 @@ def delete_session(
     session: SessionDep, current_user: CurrentUser, session_id: uuid.UUID
 ) -> Any:
     """
-    Delete a chat session.
+    删除聊天会话。
     """
     chat_session = session.get(ChatSession, session_id)
     if not chat_session:
@@ -81,7 +81,7 @@ def create_session(
     *, session: SessionDep, current_user: CurrentUser
 ) -> Any:
     """
-    Create a new chat session.
+    创建一个新的聊天会话。
     """
     chat_session = ChatSession(
         title="New Chat",
@@ -98,7 +98,7 @@ def read_sessions(
     session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
 ) -> Any:
     """
-    Retrieve chat sessions.
+    检索聊天会话列表。
     """
     count_statement = (
         select(func.count())
@@ -127,7 +127,7 @@ def read_chats(
     limit: int = 100,
 ) -> Any:
     """
-    Retrieve chat history for a specific session.
+    检索特定会话的聊天记录。
     """
     count_statement = (
         select(func.count())
@@ -154,9 +154,9 @@ def create_chat(
     *, session: SessionDep, current_user: CurrentUser, chat_in: ChatCreate
 ) -> Any:
     """
-    Send a new message and get AI response (Streaming).
+    发送新消息并获取 AI 响应（流式）。
     """
-    # 0. Build context from history (Last 10 messages of current session)
+    # 0. 从历史记录构建上下文（当前会话的最后 10 条消息）
     history_statement = (
         select(ChatMessage)
         .where(ChatMessage.owner_id == current_user.id)
@@ -165,7 +165,7 @@ def create_chat(
         .limit(10)
     )
     history_msgs = session.exec(history_statement).all()
-    # Reverse to chronological order
+    # 反转为时间顺序
     history_msgs.reverse()
     
     formatted_history = []
@@ -173,7 +173,7 @@ def create_chat(
         role = "assistant" if msg.role == "ai" else msg.role
         formatted_history.append({"role": role, "content": msg.content})
 
-    # 1. Save user message
+    # 1. 保存用户消息
     user_message = ChatMessage(
         content=chat_in.content,
         role="user",
@@ -184,7 +184,7 @@ def create_chat(
     session.commit()
     session.refresh(user_message)
 
-    # Update session title if it's the first message (or title is "New Chat")
+    # 如果是第一条消息（或标题为“New Chat”），则更新会话标题
     chat_session = session.get(ChatSession, chat_in.session_id)
     if chat_session and chat_session.title == "New Chat":
         chat_session.title = chat_in.content[:20] + "..." if len(chat_in.content) > 20 else chat_in.content
@@ -196,19 +196,19 @@ def create_chat(
         session.add(chat_session)
         session.commit()
 
-    # Extract user_id and session_id to avoid DetachedInstanceError in async generator
+    # 提取 user_id 和 session_id 以避免异步生成器中的 DetachedInstanceError
     user_id = current_user.id
     session_id = chat_in.session_id
 
-    # 2. Generator for streaming response
+    # 2. 流式响应生成器
     async def generate():
         full_response = ""
         async for chunk in call_doubao_api(chat_in.content, formatted_history):
             full_response += chunk
             yield chunk
         
-        # 3. Save AI message
-        # Use a new session because the dependency session might be closed or invalid in async context
+        # 3. 保存 AI 消息
+        # 使用新会话，因为依赖会话在异步上下文中可能已关闭或无效
         with Session(engine) as db:
             ai_message = ChatMessage(
                 content=full_response,

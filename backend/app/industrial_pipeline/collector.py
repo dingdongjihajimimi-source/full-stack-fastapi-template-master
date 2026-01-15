@@ -28,7 +28,7 @@ USER_AGENTS = [
 ]
 
 class GlobalBrowserManager:
-    """Singleton manager for a shared Browser instance."""
+    """共享浏览器实例的单例管理器。"""
     _playwright: Optional[Playwright] = None
     _browser: Optional[Browser] = None
 
@@ -39,8 +39,8 @@ class GlobalBrowserManager:
             logger.info("Global Playwright Started")
         
         if not cls._browser:
-            # Launch standard chromium, headless. 
-            # Note: stealth plugin is applied at context/page level.
+            # 启动标准 chromium（无头默认）。
+            # 注意：隐身从插件在上下文/页面级别应用。
             cls._browser = await cls._playwright.chromium.launch(headless=True)
             logger.info("Global Browser Instance Launched")
 
@@ -62,7 +62,7 @@ class GlobalBrowserManager:
 
 class IndustrialCollector:
     """
-    Industrial Harvest Collector (Stealth + Concurrency Edition)
+    工业收割采集器（隐身 + 并发版）
     """
 
     def __init__(self):
@@ -73,13 +73,13 @@ class IndustrialCollector:
         self.storage_root = Path(settings.STORAGE_ROOT_DIR)
         
     def _gaussian_delay(self, mean: float = 1.5, std: float = 0.5) -> float:
-        """Generate Gaussian-distributed delay (in seconds)."""
+        """生成符合高斯分布的延迟（秒）。"""
         delay = random.gauss(mean, std)
         # Clamp to reasonable bounds
         return max(0.5, min(delay, 4.0))
     
     def _bezier_curve(self, start: float, end: float, steps: int = 20) -> List[float]:
-        """Generate Bezier curve points for natural scrolling."""
+        """生成贝塞尔曲线点以实现自然滚动。"""
         # Cubic Bezier with random control points
         p0, p3 = start, end
         p1 = start + (end - start) * random.uniform(0.2, 0.4)
@@ -99,11 +99,11 @@ class IndustrialCollector:
         return points
         
     def _calculate_md5(self, content: bytes) -> str:
-        """Calculate MD5 hash of content."""
+        """计算内容的 MD5 哈希值。"""
         return hashlib.md5(content).hexdigest()
     
     def _get_storage_path(self, content_md5: str, extension: str = ".json") -> Path:
-        """Get storage path for content with date-based organization."""
+        """获取基于日期组织的内容存储路径。"""
         date_str = datetime.now().strftime("%Y-%m-%d")
         date_dir = self.storage_root / "raw" / date_str
         date_dir.mkdir(parents=True, exist_ok=True)
@@ -111,8 +111,8 @@ class IndustrialCollector:
     
     def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str, local_dir: Optional[Path] = None) -> bool:
         """
-        Save content using hybrid file+DB storage with MD5 deduplication.
-        If local_dir is provided, also saves a copy there for task-specific visibility.
+        使用混合文件+数据库存储保存内容，并进行 MD5 去重。
+        如果提供了 local_dir，也会在那里保存一份副本以便任务可见。
         """
         try:
             # Calculate hashes
@@ -122,10 +122,10 @@ class IndustrialCollector:
             # Determine extension
             ext = ".json" if "json" in content_type else ".html"
             
-            # 1. Handle Local Task Storage (Always save here if requested, regardless of global dupe)
+            # 1. 处理本地任务存储（如果请求，总是保存在这里，无论全局是否重复）
             if local_dir:
                 local_dir.mkdir(parents=True, exist_ok=True)
-                # Keep original filename segments for local visibility
+                # 保留原始文件名片段以便本地查看
                 url_seg = url.split("?")[0].split("/")[-1]
                 url_seg = "".join([c for c in url_seg if c.isalnum() or c in "._-"])[:30]
                 if not url_seg:
@@ -135,7 +135,7 @@ class IndustrialCollector:
                 local_path.write_bytes(content)
                 logger.debug(f"Saved local copy: {local_path.name}")
 
-            # 2. Handle Global Data Lake Storage
+            # 2. 处理全局数据湖存储
             with Session(engine) as db:
                 existing = db.query(CrawlIndex).filter(
                     CrawlIndex.content_md5 == content_md5
@@ -172,7 +172,7 @@ class IndustrialCollector:
             return False
             
     async def _detect_captcha_or_block(self, page: Page) -> bool:
-        """Detect if page is captcha/login wall/blocked."""
+        """检测页面是否被验证码/登录墙/阻止。"""
         try:
             # Check page content for blocking keywords
             content = await page.content()
@@ -196,7 +196,7 @@ class IndustrialCollector:
             return False
 
     def _is_quality_json(self, json_data: Any, url: str) -> bool:
-        """Filter out low-quality/garbage JSON (analytics, config, etc.)."""
+        """过滤掉低质量/垃圾 JSON（分析、配置等）。"""
         # Convert to string for analysis
         json_str = json.dumps(json_data, ensure_ascii=False)
         
@@ -253,9 +253,9 @@ class IndustrialCollector:
 
     async def harvest(self, url: str, output_dir: Path, config: Dict[str, Any], progress_callback: Optional[Any] = None) -> int:
         """
-        Execute harvest task with stealth tactics and concurrency support.
-        Config includes: scroll_count, max_items, wait_until, etc.
-        progress_callback: Async function to call with (current_count)
+        使用隐身策略和并发支持执行收割任务。
+        配置包括：scroll_count, max_items, wait_until 等。
+        progress_callback: 用于调用 (current_count) 的异步函数
         """
         output_dir.mkdir(parents=True, exist_ok=True)
         self.collected_count = 0
@@ -305,7 +305,7 @@ class IndustrialCollector:
                 logger.info(f"Navigating to {url} [Config: {config}]")
                 await page.goto(url, wait_until=wait_until, timeout=60000) # type: ignore
                 
-                # Check for captcha/blocking immediately after load
+                # 加载后立即检查验证码/阻止
                 if await self._detect_captcha_or_block(page):
                     logger.error("CAPTCHA or Anti-bot block detected! Aborting harvest context.")
                     return 0
@@ -344,35 +344,35 @@ class IndustrialCollector:
                              logger.error("CAPTCHA detected after recycle! Stopping.")
                              break
                         
-                    logger.info(f"Intelligent Scrolling {i+1}/{scroll_count}")
+                    logger.info(f"智能滚动 {i+1}/{scroll_count}")
                     await self._bezier_scroll(page)
                     
-                    # Auto-click "Load More" buttons if detected
+                    # 如果检测到“加载更多”按钮，则自动点击
                     await self._auto_click_load_more(page)
                     
                     # Wait for network activity to settle after scroll with Gaussian delay
                     await page.wait_for_timeout(int(self._gaussian_delay(1.2, 0.4) * 1000))
                     await self._wait_for_network_idle(page, timeout=5000)
                 
-                # Final stabilization: wait for any pending requests
+                # 最终稳定：等待所有挂起的请求
                 logger.info("Final network stabilization...")
                 await self._wait_for_network_idle(page, timeout=3000)
 
-                # --- EXTRACTION PHASE (Inside active page context) ---
+                # --- 提取阶段（在活动页面上下文中） ---
                 
-                # Extract SSR Data
+                # 提取 SSR 数据
                 try:
                     await self._extract_ssr_data(page, output_dir, progress_callback)
                 except Exception as e:
                     logger.warning(f"SSR extraction failed: {e}")
                 
-                # Extract JSON from script tags
+                # 从 script 标签提取 JSON
                 try:
                     await self._extract_script_json(page, output_dir, progress_callback)
                 except Exception as e:
                     logger.warning(f"Script JSON extraction failed: {e}")
 
-                # Capture Visual Evidence (Screenshot)
+                # 捕获视觉证据（截图）
                 try:
                     await self._capture_evidence(page, output_dir)
                 except Exception as e:
@@ -393,7 +393,7 @@ class IndustrialCollector:
                     await local_playwright.stop()
                 logger.info("Local Browser closed")
 
-        # Save Metadata
+        # 保存元数据
         self._save_metadata(url, output_dir, config)
         
         # Provide intelligent feedback if zero items collected
@@ -418,7 +418,7 @@ class IndustrialCollector:
         return self.collected_count
         
     async def _extract_ssr_data(self, page: Page, output_dir: Path, progress_callback: Optional[Any] = None):
-        """Extract SSR data and save directly to task root."""
+        """提取 SSR 数据并直接保存到任务根目录。"""
         # Common SSR patterns
         patterns = [
             "window.__INITIAL_STATE__",
@@ -447,7 +447,7 @@ class IndustrialCollector:
                 logger.debug(f"Pattern {pattern} not found or failed: {e}")
 
     async def _extract_script_json(self, page: Page, output_dir: Path, progress_callback: Optional[Any] = None):
-        """Extract JSON data from <script> tags and save directly to task root."""
+        """从 <script> 标签提取 JSON 数据并直接保存到任务根目录。"""
         scripts = await page.evaluate("""
             Array.from(document.querySelectorAll('script[type="application/json"], script:not([src])'))
                  .map(script => script.textContent)
@@ -473,7 +473,7 @@ class IndustrialCollector:
             except Exception: continue
 
     async def _capture_evidence(self, page: Page, output_dir: Path):
-        """Capture screenshot and HTML snapshot for diagnostics."""
+        """捕获截图和 HTML 快照以进行诊断。"""
         try:
             timestamp = datetime.now().strftime("%H%M%S")
             
@@ -491,7 +491,7 @@ class IndustrialCollector:
             logger.warning(f"Evidence capture failed: {e}")
 
     async def _inject_fingerprint_masking(self, page: Page):
-        """Inject scripts to mask Canvas and WebGL fingerprints."""
+        """注入脚本以掩盖 Canvas 和 WebGL 指纹。"""
         masking_script = """
         // Canvas fingerprint masking
         const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
@@ -526,7 +526,7 @@ class IndustrialCollector:
             logger.warning(f"Failed to inject masking scripts: {e}")
     
     async def _bezier_scroll(self, page: Page):
-        """Scroll using Bezier curve for natural acceleration."""
+        """使用贝塞尔曲线滚动以实现自然加速。"""
         try:
             current_scroll = await page.evaluate("window.scrollY")
             viewport_height = await page.evaluate("window.innerHeight")
@@ -560,7 +560,7 @@ class IndustrialCollector:
             logger.warning(f"Bezier scroll error: {e}")
     
     async def _auto_click_load_more(self, page: Page):
-        """Detect and click 'Load More' or similar buttons."""
+        """检测并点击“加载更多”或类似按钮。"""
         try:
             # Common patterns for pagination buttons
             selectors = [
@@ -588,7 +588,7 @@ class IndustrialCollector:
             logger.debug(f"Auto-click check failed: {e}")
 
     async def _intelligent_scroll(self, page: Page):
-        """Adaptive scrolling that waits for dynamic content to load."""
+        """自适应滚动，等待动态内容加载。"""
         try:
             # Get initial height
             prev_height = await page.evaluate("document.body.scrollHeight")
@@ -628,7 +628,7 @@ class IndustrialCollector:
             logger.warning(f"Intelligent scroll error: {e}")
     
     async def _wait_for_network_idle(self, page: Page, timeout: int = 5000):
-        """Wait until network is idle (no requests for 500ms)."""
+        """等待网络空闲（500ms 内无请求）。"""
         try:
             # Use Playwright's built-in network idle detection
             await page.wait_for_load_state("networkidle", timeout=timeout)  # type: ignore
@@ -638,7 +638,7 @@ class IndustrialCollector:
             logger.debug(f"Network idle timeout (acceptable): {e}")
 
     async def _human_scroll(self, page: Page):
-        """Simulate human scrolling behavior with randomization."""
+        """通过随机化模拟人类滚动行为。"""
         try:
             # Random scroll steps
             total_height = await page.evaluate("document.body.scrollHeight")
@@ -659,7 +659,7 @@ class IndustrialCollector:
             pass # Ignore scroll errors to ensure task continues
 
     async def _handle_response(self, response: Response, output_dir: Path, max_items: int, progress_callback: Optional[Any] = None):
-        """Handle individual network response with heuristic JSON detection."""
+        """使用启发式 JSON 检测处理单个网络响应。"""
         try:
             if self.collected_count >= max_items:
                 return
@@ -714,7 +714,7 @@ class IndustrialCollector:
                 except Exception:
                     pass
 
-            # HTML: Save main page only once
+            # HTML：仅保存主页面一次
             if "text/html" in content_type:
                 if not self.html_saved:
                     try:
@@ -732,7 +732,7 @@ class IndustrialCollector:
                         pass
                 return
 
-            # Skip images and other non-data assets
+            # 跳过图片和其他非数据资源
             if any(ct in content_type for ct in ["image/", "video/", "font/", "text/css"]):
                 return
 
@@ -740,7 +740,7 @@ class IndustrialCollector:
             logger.warning(f"Failed to process response {response.url}: {e}")
     
     async def _safe_callback(self, callback, count: int):
-        """Execute callback safely without blocking network."""
+        """安全执行回调而不阻塞网络。"""
         try:
             await callback(count)
         except Exception as e:

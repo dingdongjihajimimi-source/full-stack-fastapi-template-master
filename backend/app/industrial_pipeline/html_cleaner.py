@@ -1,8 +1,8 @@
 """
-HTML Cleaner Utility for Data Preprocessing
+用于数据预处理的 HTML 清理工具
 
-Strips non-semantic HTML tags to reduce file size and prepare data for AI extraction.
-Focuses on removing visual elements while preserving structural and data content.
+去除非语义 HTML 标签以减小文件大小并为 AI 提取准备数据。
+专注于移除视觉元素，同时保留结构和数据内容。
 """
 import re
 from pathlib import Path
@@ -11,38 +11,38 @@ from typing import Dict
 
 
 class HtmlCleaner:
-    """Lightweight HTML preprocessing for data extraction."""
+    """用于数据提取的轻量级 HTML 预处理。"""
     
-    # Tags that provide zero semantic value for data extraction
+    # 对数据提取没有语义价值的标签
     JUNK_TAGS = ['style', 'script', 'svg', 'path', 'noscript', 'iframe', 'canvas']
     
-    # Attributes that are purely visual/technical
+    # 纯视觉/技术属性
     JUNK_ATTRS = ['class', 'id', 'style', 'onclick', 'onload', 'onerror']
     
     @staticmethod
     def strip_non_semantic_tags(html: str, focus_content: bool = False) -> str:
         """
-        Remove tags and attributes that don't contribute to data extraction.
+        移除对数据提取没有贡献的标签和属性。
         
-        Args:
-            html: Raw HTML content
-            focus_content: Deprecated flag, kept for compatibility.
+        参数:
+            html: 原始 HTML 内容
+            focus_content: 已弃用的标志，为兼容性保留。
             
-        Returns:
-            Cleaned HTML with only semantic content
+        返回:
+            仅包含语义内容的清理后 HTML
         """
         soup = BeautifulSoup(html, 'html.parser')
         
-        # 1. Remove entire junk tags
+        # 1. 移除整个垃圾标签
         for tag_name in HtmlCleaner.JUNK_TAGS:
             for tag in soup.find_all(tag_name):
                 tag.decompose()
 
-        # 2. Remove HTML comments
+        # 2. 移除 HTML 注释
         for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
             comment.extract()
         
-        # 3. Remove junk attributes from remaining tags
+        # 3. 从剩余标签中移除垃圾属性
         for tag in list(soup.find_all(True)):
             if tag is None: continue
             for attr in HtmlCleaner.JUNK_ATTRS:
@@ -50,7 +50,7 @@ class HtmlCleaner:
                     del tag.attrs[attr]
         
         
-        # 5. Collapse excessive whitespace
+        # 5. 合并多余的空格
         cleaned_html = str(soup)
         cleaned_html = re.sub(r'\n\s*\n', '\n', cleaned_html)  # Remove blank lines
         cleaned_html = re.sub(r'  +', ' ', cleaned_html)  # Collapse multiple spaces
@@ -60,14 +60,14 @@ class HtmlCleaner:
     @staticmethod
     def get_file_size_reduction(original_path: Path, cleaned_content: str) -> Dict[str, any]:
         """
-        Calculate size reduction statistics.
+        计算大小缩减统计信息。
         
-        Args:
-            original_path: Path to original HTML file
-            cleaned_content: Cleaned HTML string
+        参数:
+            original_path: 原始 HTML 文件路径
+            cleaned_content: 清理后的 HTML 字符串
             
-        Returns:
-            Dict with original_size, cleaned_size, reduction_bytes, reduction_percent
+        返回:
+            包含 original_size, cleaned_size, reduction_bytes, reduction_percent 的字典
         """
         original_size = original_path.stat().st_size
         cleaned_size = len(cleaned_content.encode('utf-8'))
@@ -84,14 +84,14 @@ class HtmlCleaner:
     @staticmethod
     def clean_file(input_path: Path, output_path: Path) -> Dict[str, any]:
         """
-        Clean an HTML file and save the result.
+        清理 HTML 文件并保存结果。
         
-        Args:
-            input_path: Source HTML file
-            output_path: Destination for cleaned HTML
+        参数:
+            input_path: 源 HTML 文件
+            output_path: 清理后 HTML 的目标路径
             
-        Returns:
-            Statistics dict
+        返回:
+            统计信息字典
         """
         try:
             html_content = input_path.read_text(encoding='utf-8')
@@ -108,7 +108,7 @@ class HtmlCleaner:
             print(f"CRITICAL CLEANING ERROR: {e}")
             traceback.print_exc()
             
-            # Fallback: Just copy original file if cleaning fails
+            # 回退：如果清理失败，仅复制原始文件
             output_path.write_text(html_content if 'html_content' in locals() else "", encoding='utf-8')
             return {
                 "original_size": 0,

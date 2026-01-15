@@ -14,7 +14,7 @@ class Scout:
 
     async def sniff_sample(self, url: str, scroll_count: int = 2, task_id: str = "Unknown", log_callback=None) -> List[Candidate]:
         """
-        Phase 1: Navigate, scroll, and capture all JSON candidates.
+        第一阶段：导航、滚动并捕获所有 JSON 候选者。
         """
         candidates: List[Candidate] = []
         user_agent = self.ua.random
@@ -41,7 +41,7 @@ class Scout:
                     resource_type = request.resource_type
                     content_type = response.headers.get("content-type", "").lower()
 
-                    # Filter for JSON-like responses
+                    # 过滤类似 JSON 的响应
                     is_json = any(t in content_type for t in [
                         "application/json", 
                         "application/vnd.api+json", 
@@ -50,16 +50,16 @@ class Scout:
                         "application/javascript"
                     ])
                     
-                    # Also accept text/plain if it looks like JSON
+                    # 如果看起来像 JSON，也接受 text/plain
                     if "text/plain" in content_type:
                         try:
-                            # We'll peek at the body later to confirm
+                            # 稍后我们会查看正文进行确认
                             is_json = True
                         except:
                             pass
 
-                    # Relaxed resource type filter
-                    # Accept almost anything that isn't obviously media/css
+                    # 放宽的资源类型过滤器
+                    # 接受几乎任何不是明显媒体/CSS 的内容
                     is_data_request = resource_type in ["xhr", "fetch", "script", "other", "document"]
                     
                     if is_json and is_data_request:
@@ -70,13 +70,13 @@ class Scout:
                         
                         try:
                             body = await response.text()
-                            # Double check content for JSON-like structure if ambiguous
+                            # 如果不明确，仔细检查内容是否有类似 JSON 的结构
                             if "text/plain" in content_type and not (body.strip().startswith("{") or body.strip().startswith("[")):
                                 return
                             
-                            preview = body[:5000] # Increased preview size
+                            preview = body[:5000] # 增加预览大小
                         except Exception:
-                            # If we can't read the body, skip it
+                            # 如果无法读取正文，则跳过
                             return
 
                         candidate = Candidate(
@@ -90,7 +90,7 @@ class Scout:
                         candidates.append(candidate)
                         await _log(f"Captured candidate: {request.method} {request.url} ({resource_type})", "DEBUG")
                     else:
-                        # Log rejected URLs at DEBUG level only
+                        # 仅在 DEBUG 级别记录拒绝的 URL
                         # await _log(f"Skipped: {request.url} (Type: {content_type})", "DEBUG")
                         pass
 
@@ -108,7 +108,7 @@ class Scout:
                     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     await asyncio.sleep(random.uniform(1.5, 3.0))
                 
-                # Final wait for trailing requests
+                # 最后等待后续请求
                 await asyncio.sleep(3.0)
 
             except Exception as e:
@@ -121,21 +121,21 @@ class Scout:
 
     def _deduplicate_candidates(self, candidates: List[Candidate]) -> List[Candidate]:
         """
-        Simple deduplication to avoid sending identical API calls to AI.
-        Groups by Method + URL Path (ignoring query params mostly, or maybe keeping them?)
-        Let's keep unique Method+URL for now.
+        简单的去重，以避免向 AI 发送相同的 API 调用。
+        按方法 + URL 路径分组（主要忽略查询参数，或者保留它们？）
+        目前让我们保持唯一的方法+URL。
         """
         unique_map = {}
         for c in candidates:
-            # Use full URL to distinguish different pagination calls etc, 
-            # but maybe we only need one sample per endpoint pattern?
-            # AI needs to see the pattern. 
-            # Let's keep one sample per "Endpoint Path".
+            # 使用完整 URL 来区分不同的分页调用等，
+            # 但也许每个端点模式只需要一个样本？
+            # AI 需要看到模式。
+            # 让我们每个“端点路径”保留一个样本。
             from urllib.parse import urlparse
             parsed = urlparse(c.url)
             key = f"{c.method}:{parsed.scheme}://{parsed.netloc}{parsed.path}"
             
-            # Keep the one with the longest preview (most data)
+            # 保留预览最长的一个（数据最多）
             if key not in unique_map:
                 unique_map[key] = c
             else:

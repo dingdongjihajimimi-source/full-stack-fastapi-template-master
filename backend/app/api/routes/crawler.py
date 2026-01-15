@@ -24,8 +24,8 @@ class CrawlRequest(BaseModel):
     columns: list[str] = []
     max_pages: int = 1
     concurrency: int = 5
-    mode: str = "manual"  # "manual" or "auto"
-    review_mode: bool = False # Pause for review in auto mode
+    mode: str = "manual"  # "manual" 或 "auto"
+    review_mode: bool = False # 自动模式下暂停等待审核
 
 class ResumeRequest(BaseModel):
     task_id: uuid.UUID
@@ -38,7 +38,7 @@ def start_crawl(
     session: SessionDep,
 ) -> Any:
     """
-    Start a crawler task (Manual or Autonomous).
+    启动爬虫任务（手动或自主）。
     """
     crawler_task = CrawlerTask(status="pending")
     session.add(crawler_task)
@@ -46,8 +46,8 @@ def start_crawl(
     session.refresh(crawler_task)
 
     if request.mode == "auto":
-        # Initialize pipeline_state with starting log
-        initial_logs = [f"[{datetime.now().strftime('%H:%M:%S')}] Task initialized. Queued for execution..."]
+        # 初始化管道状态并记录启动日志
+        initial_logs = [f"[{datetime.now().strftime('%H:%M:%S')}] 任务初始化。已排队等待执行..."]
         crawler_task.pipeline_state = json.dumps({"logs": initial_logs})
         session.add(crawler_task)
         session.commit()
@@ -60,7 +60,7 @@ def start_crawl(
             request.review_mode
         )
     else:
-        # Fallback to manual mode defaults if not provided
+        # 如果未提供，则回退到手动模式默认值
         table_name = request.table_name or "scraped_data"
         columns = request.columns or ["content"]
         
@@ -83,7 +83,7 @@ def resume_crawl(
     session: SessionDep,
 ) -> Any:
     """
-    Resume a paused autonomous crawl with the confirmed strategy.
+    使用确认的策略恢复暂停的自主爬取。
     """
     task = session.get(CrawlerTask, request.task_id)
     if not task:
@@ -92,12 +92,12 @@ def resume_crawl(
     if task.status != "paused":
         raise HTTPException(status_code=400, detail="Task is not paused")
 
-    # Update status to processing
+    # 更新状态为处理中
     task.status = "processing"
     session.add(task)
     session.commit()
 
-    # Re-instantiate strategy from dict
+    # 从字典重新实例化策略
     try:
         strategy = ExtractionStrategy(**request.strategy)
     except Exception as e:
@@ -118,13 +118,13 @@ async def run_autonomous_pipeline_task(
     review_mode: bool
 ):
     """
-    Wrapper to run the pipeline and update DB state.
-    We need a fresh session here ideally if running in background?
-    FastAPI BackgroundTasks shares session context usually, but better be safe.
-    Actually `session` passed here might be closed when request ends. 
-    We should create a new session or use the passed one if safe. 
-    FastAPI docs say BackgroundTasks runs AFTER response, so dependency session might be closed.
-    We should use a new session factory.
+    运行管道并更新数据库状态的包装器。
+    我们在这里需要一个新的会话，因为如果在后台运行，
+    FastAPI BackgroundTasks 通常会共享会话上下文，但为了安全起见。
+    实际上，这里传递的 `session` 可能会在请求结束时关闭。
+    我们应该创建一个新的会话或在安全的情况下使用传递的会话。
+    FastAPI 文档称 BackgroundTasks 在响应后运行，因此依赖会话可能会关闭。
+    我们应该使用新的会话工厂。
     """
     from app.core.db import engine
     from sqlmodel import Session
@@ -138,39 +138,39 @@ async def run_autonomous_pipeline_task(
                 task.current_phase = phase
                 existing = json.loads(task.pipeline_state) if task.pipeline_state else {}
                 
-                # Update logs
+                # 更新日志
                 logs = existing.get("logs", [])
                 timestamp = datetime.now().strftime("%H:%M:%S")
                 
-                # Check if there is a specific log message in data
+                # 检查数据中是否有特定的日志消息
                 log_message = f"Phase: {phase}"
                 if data and "log_message" in data:
                     log_message = data["log_message"]
-                    # If it's a pure log update, we might not want to change phase in DB if it's just "log"
-                    # But current_phase is useful for UI progress bar. 
-                    # If phase is "log", we keep the previous phase?
-                    # Let's assume phase is always passed correctly.
+                    # 如果是纯日志更新，我们可能不想更改数据库中的阶段
+                    # 但 current_phase 对 UI 进度条很有用。
+                    # 如果阶段是“日志”，我们保留上一个阶段？
+                    # 让我们假设阶段总是正确传递的。
                 elif phase == "scout":
-                     log_message = "Phase: Scout (Sampling)"
+                     log_message = "阶段：侦察（采样）"
                 elif phase == "architect":
-                     log_message = "Phase: Architect (Strategy Definition)"
+                     log_message = "阶段：架构师（策略定义）"
                 elif phase == "review":
-                     log_message = "Phase: Review (Waiting for user)"
+                     log_message = "阶段：审核（等待用户）"
                 elif phase == "harvester":
-                     log_message = "Phase: Harvester (Execution)"
+                     log_message = "阶段：收获者（执行）"
                 elif phase == "refinery":
-                     log_message = "Phase: Refinery (ETL & SQL)"
+                     log_message = "阶段：精炼厂（ETL & SQL）"
                 elif phase == "completed":
-                     log_message = "Phase: Completed"
+                     log_message = "阶段：已完成"
                 elif phase == "failed":
-                     error_msg = data.get("error", "Unknown error") if data else "Unknown error"
-                     log_message = f"Phase: Failed - {error_msg}"
+                     error_msg = data.get("error", "未知错误") if data else "未知错误"
+                     log_message = f"阶段：失败 - {error_msg}"
 
                 logs.append(f"[{timestamp}] {log_message}")
                 existing["logs"] = logs
                 
                 if data:
-                    # Add URL if not present (hack for resume)
+                    # 如果不存在 URL 则添加（用于恢复的临时处理）
                     if "url" not in existing:
                         existing["url"] = url
                     existing.update(data)
@@ -191,7 +191,7 @@ async def run_autonomous_pipeline_task(
                 db_session.add(task)
                 db_session.commit()
 
-    # Run Pipeline
+    # 运行管道
     await pipeline.run(url, task_id, update_callback=update_state, table_name_hint=table_name_hint, review_mode=review_mode)
 
 async def resume_autonomous_pipeline_task(
@@ -204,6 +204,7 @@ async def resume_autonomous_pipeline_task(
     logger.info(f"🔄 Resuming autonomous pipeline task: {task_id}")
 
     # Retrieve URL from saved state
+    # 从保存的状态中检索 URL
     url = ""
     with Session(engine) as db_session:
         task = db_session.get(CrawlerTask, uuid.UUID(task_id))
@@ -275,7 +276,7 @@ def get_crawl_status(
     session: SessionDep,
 ) -> Any:
     """
-    Get crawler task status.
+    获取爬虫任务状态。
     """
     task = session.get(CrawlerTask, task_id)
     if not task:
@@ -289,7 +290,7 @@ def download_crawl_file(
     session: SessionDep,
 ) -> Any:
     """
-    Download generated CSV or SQL file.
+    下载生成的 CSV 或 SQL 文件。
     """
     task = session.get(CrawlerTask, task_id)
     if not task:
@@ -319,13 +320,13 @@ def download_crawl_file(
 @router.get("/logs/{task_id}")
 def get_task_logs(task_id: uuid.UUID, session: SessionDep):
     """
-    Get recent logs/events for a task from its pipeline_state.
+    从 pipeline_state 获取任务的最近日志/事件。
     """
     task = session.get(CrawlerTask, task_id)
     if not task or not task.pipeline_state:
         return {"logs": []}
     
     state = json.loads(task.pipeline_state)
-    # We could store a 'logs' list in state
+    # 我们可以在状态中存储“日志”列表
     logs = state.get("logs", [])
     return {"logs": logs}

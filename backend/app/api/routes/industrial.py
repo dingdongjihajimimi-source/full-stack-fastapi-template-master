@@ -34,7 +34,7 @@ class CollectRequest(BaseModel):
     url: str
     scroll_count: int = 5
     max_items: int = 100
-    wait_until: str = "networkidle"  # networkidle, commit, domcontentloaded, load
+    wait_until: str = "networkidle"  # networkidle, commit, domcontentloaded, load (直到网络空闲)
 
 
 async def run_industrial_harvest(batch_id: str, url: str, config: dict):
@@ -58,7 +58,7 @@ async def run_industrial_harvest(batch_id: str, url: str, config: dict):
             db.commit()
     
     async def update_progress(current_count: int):
-        """Callback to update item count in DB"""
+        """更新数据库中项目数量的回调"""
         with Session(engine) as db:
             b = db.get(IndustrialBatch, uuid.UUID(batch_id))
             if b:
@@ -270,8 +270,8 @@ def delete_batch(batch_id: uuid.UUID, session: SessionDep) -> dict:
 
 
 class LightCleanRequest(BaseModel):
-    """Light clean request parameters"""
-    file_name: str  # Name of the HTML file to clean
+    """轻度清理请求参数"""
+    file_name: str  # 要清理的 HTML 文件名
 
 
 @router.post("/batch/{batch_id}/light-clean")
@@ -281,14 +281,14 @@ def light_clean_batch_file(
     session: SessionDep
 ) -> Any:
     """
-    Perform lightweight HTML cleaning on a specific file from a batch.
+    对批次中的特定文件执行轻量级 HTML 清理。
     
-    Strips non-semantic tags (style, script, svg) to reduce file size
-    and prepare for AI extraction.
+    去除非语义标签（style, script, svg）以减小文件大小
+    并为 AI 提取做准备。
     """
     from app.industrial_pipeline.html_cleaner import HtmlCleaner
     
-    # Validate batch exists
+    # 验证批次是否存在
     batch = session.get(IndustrialBatch, uuid.UUID(batch_id))
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
@@ -299,12 +299,12 @@ def light_clean_batch_file(
     if not input_file.exists():
         raise HTTPException(status_code=404, detail=f"File {request.file_name} not found in batch")
     
-    # Generate output filename
+    # 生成输出文件名
     output_filename = f"{input_file.stem}_cleaned{input_file.suffix}"
     output_file = batch_dir / output_filename
     
     try:
-        # Perform cleaning
+        # 执行清理
         stats = HtmlCleaner.clean_file(input_file, output_file)
         
         logger.info(f"Light clean completed: {request.file_name} -> {output_filename}")
@@ -324,25 +324,25 @@ def light_clean_batch_file(
 @router.post("/upload-clean")
 async def upload_and_clean(file: UploadFile = File(...)) -> Any:
     """
-    Stateless file upload and cleaning.
-    Saves uploaded file to temp, cleans it, and returns stats.
+    无状态文件上传和清理。
+    保存上传的文件到临时目录，进行清理，并返回统计信息。
     """
     if not file.filename.endswith(('.html', '.htm')):
         raise HTTPException(status_code=400, detail="Only HTML files are supported")
 
     try:
-        # Create temp files
+        # 创建临时文件
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_in:
             shutil.copyfileobj(file.file, tmp_in)
             input_path = Path(tmp_in.name)
         
         output_path = input_path.parent / f"{input_path.stem}_cleaned.html"
         
-        # Clean
+        # 清理
         cleaner = HtmlCleaner()
         stats = cleaner.clean_file(input_path, output_path)
         
-        # Return stats and temp file ID
+        # 返回统计信息和临时文件 ID
         return {
             "message": "Cleaning successful",
             "temp_id": output_path.name,
@@ -354,7 +354,7 @@ async def upload_and_clean(file: UploadFile = File(...)) -> Any:
         logger.error(f"Upload cleaning failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Cleanup input file immediately, keep output for download
+        # 立即清理输入文件，保留输出文件以供下载
         if 'input_path' in locals() and input_path.exists():
             try:
                 os.unlink(input_path)
@@ -364,9 +364,9 @@ async def upload_and_clean(file: UploadFile = File(...)) -> Any:
 @router.get("/temp-file/{filename}")
 async def download_temp_file(filename: str):
     """
-    Download a temporary cleaned file.
+    下载临时清理后的文件。
     """
-    # Security check: only allow files created in temp dir and with known pattern
+    # 安全检查：只允许下载临时目录中以已知模式创建的文件
     temp_dir = Path(tempfile.gettempdir())
     file_path = temp_dir / filename
     
@@ -383,8 +383,8 @@ async def download_temp_file(filename: str):
 @router.post("/upload-deep-clean")
 async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
     """
-    Deep clean: Light clean + AI extraction.
-    Returns JSON data extracted by AI, or falls back to light clean stats on failure.
+    深度清理：轻度清理 + AI 提取。
+    返回 AI 提取的 JSON 数据，如果失败则回退到轻度清理统计信息。
     """
     from app.industrial_pipeline.ai_extractor import AiExtractor
     
@@ -392,26 +392,26 @@ async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
         raise HTTPException(status_code=400, detail="Only HTML files are supported")
 
     try:
-        # Step 1: Save uploaded file
+        # 第一步：保存上传的文件
         with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_in:
             shutil.copyfileobj(file.file, tmp_in)
             input_path = Path(tmp_in.name)
         
         output_path = input_path.parent / f"{input_path.stem}_cleaned.html"
         
-        # Step 2: Light clean first
+        # 第二步：先进行轻度清理
         cleaner = HtmlCleaner()
         stats = cleaner.clean_file(input_path, output_path)
         
-        # Read cleaned HTML for AI
+        # 读取清理后的 HTML 以供 AI 使用
         cleaned_html = output_path.read_text(encoding='utf-8')
         
-        # Step 3: AI extraction
+        # 第三步：AI 提取
         extractor = AiExtractor()
         ai_result = extractor.extract(cleaned_html)
         
         if ai_result and ai_result.get("success"):
-            # Save extracted JSON to temp file for download
+            # 将提取的 JSON 保存到临时文件以供下载
             json_output_path = input_path.parent / f"{input_path.stem}_extracted.json"
             import json
             json_output_path.write_text(json.dumps(ai_result["data"], ensure_ascii=False, indent=2), encoding='utf-8')
@@ -426,7 +426,7 @@ async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
                 "tokens_used": ai_result.get("tokens_used", {})
             }
         else:
-            # AI failed - fallback to light clean
+            # AI 失败 - 回退到轻度清理
             logger.warning(f"AI extraction failed, falling back to light clean: {ai_result}")
             return {
                 "message": "AI extraction failed, returning light clean result",
@@ -441,7 +441,7 @@ async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
         logger.error(f"Deep clean failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # Cleanup input file immediately
+        # 立即清理输入文件
         if 'input_path' in locals() and input_path.exists():
             try:
                 os.unlink(input_path)
@@ -452,7 +452,7 @@ async def upload_and_deep_clean(file: UploadFile = File(...)) -> Any:
 @router.get("/temp-json/{filename}")
 async def download_temp_json(filename: str):
     """
-    Download a temporary extracted JSON file.
+    下载临时提取的 JSON 文件。
     """
     temp_dir = Path(tempfile.gettempdir())
     file_path = temp_dir / filename

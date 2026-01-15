@@ -1,28 +1,28 @@
 """
-Hybrid Storage and Deduplication Helper Methods for Industrial Collector.
+工业采集器的混合存储和去重辅助方法。
 
-These methods should be added to the IndustrialCollector class.
+这些方法应添加到 IndustrialCollector 类中。
 """
 
 def _calculate_md5(self, content: bytes) -> str:
-    """Calculate MD5 hash of content."""
+    """计算内容的 MD5 哈希值。"""
     return hashlib.md5(content).hexdigest()
 
 def _get_storage_path(self, content_md5: str, extension: str = ".json") -> Path:
-    """Get storage path for content with date-based organization."""
+    """获取基于日期组织的内容存储路径。"""
     date_str = datetime.now().strftime("%Y-%m-%d")
     date_dir = self.storage_root / "raw" / date_str
     date_dir.mkdir(parents=True, exist_ok=True)
     return date_dir / f"{content_md5}{extension}"
 
 def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str) -> bool:
-    """Save content using hybrid file+DB storage with MD5 deduplication."""
+    """使用混合文件+数据库存储保存内容，并进行 MD5 去重。"""
     try:
-        # Calculate hashes
+        # 计算哈希值
         url_hash = self._calculate_md5(url.encode())
         content_md5 = self._calculate_md5(content)
         
-        # Check for duplicate content
+        # 检查重复内容
         with Session(engine) as db:
             existing = db.query(CrawlIndex).filter(
                 CrawlIndex.content_md5 == content_md5
@@ -30,22 +30,22 @@ def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str) -
             
             if existing:
                 logger.debug(f"Duplicate content detected (MD5: {content_md5[:8]}), skipping write")
-                # Update timestamp only
+                # 仅更新时间戳
                 existing.updated_at = datetime.utcnow()
                 db.commit()
                 return False  # Didn't write new file
             
-            # Determine extension
+            # 确定扩展名
             ext = ".json" if "json" in content_type else ".html"
             file_path = self._get_storage_path(content_md5, ext)
             
-            # Write file
+            # 写入文件
             file_path.write_bytes(content)
             
-            # Create DB index
+            # 创建数据库索引
             index_entry = CrawlIndex(
                 url_hash=url_hash,
-                original_url=url[:2048],  # Truncate if too long
+                original_url=url[:2048],  # 如果太长则截断
                 file_path=str(file_path.relative_to(self.storage_root)),
                 content_md5=content_md5,
                 content_type=content_type,
@@ -62,9 +62,9 @@ def _save_to_hybrid_storage(self, url: str, content: bytes, content_type: str) -
         return False
 
 async def _detect_captcha_or_block(self, page: Page) -> bool:
-    """Detect if page is captcha/login wall/blocked."""
+    """检测页面是否被验证码/登录墙/阻止。"""
     try:
-        # Check page content for blocking keywords
+        # 检查页面内容中的阻止关键字
         content = await page.content()
         content_lower = content.lower()
         

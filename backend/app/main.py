@@ -8,16 +8,16 @@ from app.api.main import api_router
 from app.core.config import settings
 from app.industrial_pipeline.collector import GlobalBrowserManager
 
-# 中文：自定义生成唯一ID函数
+# 自定义生成唯一ID函数
 def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Launch Global Browser
+    # 启动：启动全局浏览器
     await GlobalBrowserManager.start()
     yield
-    # Shutdown: Close Global Browser
+    # 关闭：关闭全局浏览器
     await GlobalBrowserManager.stop()
 
 if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
@@ -30,8 +30,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 中文：添加CORS中间件
-# Set all CORS enabled origins
+# 添加 CORS 中间件
+# 设置所有允许的 CORS 源
 if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,

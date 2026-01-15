@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from .user import User
 
 
-# Chat Session models
+# 聊天会话模型
 class ChatSessionBase(SQLModel):
     title: str = Field(max_length=255)
 
@@ -37,10 +37,10 @@ class ChatSessionsPublic(SQLModel):
     count: int
 
 
-# Chat Message models
+# 聊天消息模型
 class ChatMessageBase(SQLModel):
     content: str
-    role: str = Field(max_length=50)  # "user" or "ai"
+    role: str = Field(max_length=50)  # "user"（用户）或 "ai"（人工智能）
 
 
 class ChatCreate(SQLModel):

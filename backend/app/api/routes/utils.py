@@ -17,7 +17,7 @@ router = APIRouter(prefix="/utils", tags=["utils"])
 )
 def test_email(email_to: EmailStr) -> Message:
     """
-    Test emails.
+    测试邮件功能。
     """
     email_data = generate_test_email(email_to=email_to)
     send_email(

@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_layout/")({
   head: () => ({
     meta: [
       {
-        title: "Dashboard - FastAPI Cloud",
+        title: "全/半自动化脚本工具",
       },
     ],
   }),
@@ -30,15 +30,15 @@ class Particle {
     this.y = y
     this.color = color
     this.alpha = 1.0
-    
+
     // Explosion physics
     const angle = Math.random() * Math.PI * 2
     // Random speed between 2 and 6
-    const speed = Math.random() * 4 + 2 
-    
+    const speed = Math.random() * 4 + 2
+
     this.vx = Math.cos(angle) * speed
     this.vy = Math.sin(angle) * speed
-    
+
     // Decay rate (lifespan)
     this.decay = Math.random() * 0.015 + 0.005
   }
@@ -49,7 +49,7 @@ class Particle {
     // Friction
     this.vx *= 0.98
     this.vy *= 0.98
-    
+
     this.x += this.vx
     this.y += this.vy
     this.alpha -= this.decay
@@ -93,17 +93,17 @@ function Dashboard() {
       // Adjust this if your API is on a different port in dev
       const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000"
       const wsUrl = `${apiBase.replace(/^http/, "ws")}/api/v1/fireworks/stream`
-      
+
       const ws = new WebSocket(wsUrl)
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data)
           // data: { x: 0-100, y: 0-100, color: hex, type: string, intensity: 0.0-1.0 }
-          
+
           const screenX = (data.x / 100) * canvas.width
           const screenY = (data.y / 100) * canvas.height
-          
+
           // Instantiate 50-100 particles
           const particleCount = Math.floor(Math.random() * 50) + 50
           for (let i = 0; i < particleCount; i++) {
@@ -122,7 +122,7 @@ function Dashboard() {
 
       wsRef.current = ws
     }
-    
+
     connectWebSocket()
 
     // 3. Animation Loop
@@ -137,7 +137,7 @@ function Dashboard() {
         const p = particlesRef.current[i]
         p.update()
         p.draw(ctx)
-        
+
         // Remove dead particles
         if (p.alpha <= 0) {
           particlesRef.current.splice(i, 1)
@@ -146,7 +146,7 @@ function Dashboard() {
 
       animationFrameRef.current = requestAnimationFrame(render)
     }
-    
+
     render()
 
     // Cleanup
@@ -166,7 +166,7 @@ function Dashboard() {
         ref={canvasRef}
         className="absolute inset-0 pointer-events-none z-50"
       />
-      
+
       {/* Layer 1: Background Video + Overlay */}
       <div className="absolute inset-0 z-0">
         <CyberBackground />

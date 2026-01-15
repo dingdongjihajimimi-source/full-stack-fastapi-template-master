@@ -26,6 +26,7 @@ backend/.venv/
 # Local data & storage
 backend/generated_data/
 backend/app/storage/
+backend/backend/storage/
 backend/openapi_dump.json
 backend/stress_test_crawler.py
 backend/test_crawler_flow.py
